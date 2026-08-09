@@ -211,3 +211,64 @@ struct ExplainJson {
     patterns: Vec<String>,
     cochange_partners: Vec<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::risk_level;
+    use bs_core::{LangId, Symbol, SymbolKind};
+    use std::path::PathBuf;
+
+    fn sym(hotspot: f32, complexity: u32, _fanin: u32, patterns: &[&str]) -> Symbol {
+        Symbol {
+            id: "test".to_string(),
+            kind: SymbolKind::Function,
+            name: "test".to_string(),
+            qualified: "test".to_string(),
+            file: PathBuf::from("src/lib.rs"),
+            span: (1, 10),
+            lang: LangId::Rust,
+            churn: 0,
+            age_days: 0,
+            loc: 10,
+            complexity,
+            hotspot,
+            patterns: patterns.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn test_risk_dangerous_pattern_always_high() {
+        let s = sym(0.0, 0, 0, &["lock", "await"]);
+        assert!(risk_level(&s, 0).starts_with("HIGH RISK"));
+    }
+
+    #[test]
+    fn test_risk_hot_complex_central_is_high() {
+        let s = sym(0.8, 15, 10, &[]);
+        assert!(risk_level(&s, 10).starts_with("HIGH RISK"));
+    }
+
+    #[test]
+    fn test_risk_hot_and_complex_medium() {
+        let s = sym(0.8, 15, 0, &[]);
+        assert!(risk_level(&s, 0).starts_with("MEDIUM RISK"));
+    }
+
+    #[test]
+    fn test_risk_hot_and_central_medium() {
+        let s = sym(0.8, 3, 10, &[]);
+        assert!(risk_level(&s, 10).starts_with("MEDIUM RISK"));
+    }
+
+    #[test]
+    fn test_risk_complex_and_central_medium() {
+        let s = sym(0.0, 15, 10, &[]);
+        assert!(risk_level(&s, 10).starts_with("MEDIUM RISK"));
+    }
+
+    #[test]
+    fn test_risk_cold_simple_low() {
+        let s = sym(0.1, 2, 1, &[]);
+        assert!(risk_level(&s, 1).starts_with("LOW RISK"));
+    }
+}

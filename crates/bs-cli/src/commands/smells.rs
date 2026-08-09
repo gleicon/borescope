@@ -310,7 +310,7 @@ fn percentile(mut values: Vec<f64>, p: f64) -> f64 {
     if values.is_empty() {
         return 0.0;
     }
-    values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    values.sort_by(|a, b| a.total_cmp(b));
     let idx = ((p / 100.0) * (values.len() - 1) as f64).round() as usize;
     values[idx.min(values.len() - 1)]
 }
@@ -426,4 +426,141 @@ fn format_report(report: &SmellReport, recommend: bool) -> String {
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bs_core::{CoChange, FileStat, Symbol, SymbolKind};
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    fn file_stat(path: &str, loc: u32, churn: u32, age_days: u32, hotspot: f32) -> FileStat {
+        FileStat {
+            path: path.to_string(),
+            lang: bs_core::LangId::Rust,
+            loc,
+            churn,
+            age_days,
+            last_commit_sha: None,
+            last_commit_ts: None,
+            hotspot,
+        }
+    }
+
+    fn sym(name: &str, patterns: &[&str], hotspot: f32, complexity: u32) -> Symbol {
+        Symbol {
+            id: name.to_string(),
+            kind: SymbolKind::Function,
+            name: name.to_string(),
+            qualified: name.to_string(),
+            file: PathBuf::from("src/lib.rs"),
+            span: (1, 10),
+            lang: bs_core::LangId::Rust,
+            churn: 2,
+            age_days: 10,
+            loc: 10,
+            complexity,
+            hotspot,
+            patterns: patterns.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    fn cochange(a: &str, b: &str, strength: f32) -> CoChange {
+        CoChange {
+            file_a: a.to_string(),
+            file_b: b.to_string(),
+            support: 5,
+            strength,
+            strength_rev: strength,
+        }
+    }
+
+    #[test]
+    fn test_detect_god_file_p95() {
+        let mut stats: Vec<FileStat> = (0..20)
+            .map(|i| file_stat(&format!("f{}.rs", i), i * 10 + 1, i + 1, 10, 0.0))
+            .collect();
+        stats.push(file_stat("god.rs", 5000, 500, 5, 0.9));
+
+        let mut report = SmellReport::default();
+        detect_god_file(&stats, &mut report);
+        assert!(
+            report.god_file.contains(&"god.rs".to_string()),
+            "god.rs must be flagged"
+        );
+    }
+
+    #[test]
+    fn test_detect_shotgun_surgery() {
+        let pairs: Vec<CoChange> = (0..5)
+            .map(|i| cochange("hub.rs", &format!("spoke{}.rs", i), 0.8))
+            .collect();
+        let mut report = SmellReport::default();
+        detect_shotgun_surgery(&pairs, 0.5, 4, &mut report);
+        assert!(
+            report
+                .shotgun_surgery
+                .iter()
+                .any(|e| e.file == "hub.rs" && e.partners >= 4),
+            "hub.rs must be flagged for shotgun surgery"
+        );
+    }
+
+    #[test]
+    fn test_detect_stale_core() {
+        let stats = vec![
+            file_stat("old_core.rs", 100, 50, 800, 0.5), // old + high churn
+            file_stat("new_file.rs", 100, 50, 30, 0.5),  // recent — must not flag
+        ];
+        let mut report = SmellReport::default();
+        detect_stale_core(&stats, &mut report);
+        assert!(
+            report.stale_core.contains(&"old_core.rs".to_string()),
+            "old_core.rs must be stale-core"
+        );
+        assert!(
+            !report.stale_core.contains(&"new_file.rs".to_string()),
+            "new_file.rs must not be stale-core"
+        );
+    }
+
+    #[test]
+    fn test_detect_semantic_lock_await() {
+        let s = sym("risky_fn", &["lock", "await"], 0.3, 3);
+        let mut report = SmellReport::default();
+        detect_semantic(&[s], &HashMap::new(), &mut report);
+        assert!(
+            report
+                .semantic
+                .iter()
+                .any(|e| e.kind == "lock_across_await"),
+            "lock+await must produce lock_across_await smell"
+        );
+    }
+
+    #[test]
+    fn test_detect_semantic_spawn_loop() {
+        let s = sym("leaky_fn", &["spawn", "loop"], 0.3, 3);
+        let mut report = SmellReport::default();
+        detect_semantic(&[s], &HashMap::new(), &mut report);
+        assert!(
+            report
+                .semantic
+                .iter()
+                .any(|e| e.kind == "spawn_in_tight_loop"),
+            "spawn+loop must produce spawn_in_tight_loop"
+        );
+    }
+
+    #[test]
+    fn test_detect_semantic_no_patterns_skipped() {
+        let s = sym("clean_fn", &[], 0.9, 20);
+        let mut report = SmellReport::default();
+        detect_semantic(&[s], &HashMap::new(), &mut report);
+        assert!(
+            report.semantic.is_empty(),
+            "no patterns = no semantic smells"
+        );
+    }
 }

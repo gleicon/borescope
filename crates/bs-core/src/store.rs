@@ -100,10 +100,12 @@ impl Store {
         }
         let conn = Connection::open(&db_path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
-        Ok(Self {
+        let store = Self {
             conn,
             root: repo_root.to_path_buf(),
-        })
+        };
+        store.init_schema()?;
+        Ok(store)
     }
 
     fn init_schema(&self) -> Result<()> {
@@ -607,5 +609,112 @@ impl<T> OptionalExt<T> for rusqlite::Result<T> {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn open_temp() -> (Store, TempDir) {
+        let tmp = TempDir::new().unwrap();
+        let store = Store::open(tmp.path()).unwrap();
+        (store, tmp)
+    }
+
+    fn make_sym(id: &str, name: &str, file: &str) -> Symbol {
+        Symbol {
+            id: id.to_string(),
+            kind: SymbolKind::Function,
+            name: name.to_string(),
+            qualified: format!("{}:{}", file, name),
+            file: std::path::PathBuf::from(file),
+            span: (1, 10),
+            lang: LangId::Rust,
+            churn: 0,
+            age_days: 0,
+            loc: 10,
+            complexity: 3,
+            hotspot: 0.0,
+            patterns: vec![],
+        }
+    }
+
+    #[test]
+    fn test_upsert_and_find_symbol() {
+        let (store, _tmp) = open_temp();
+        store.upsert_file("src/lib.rs", &LangId::Rust, 100).unwrap();
+        let sym = make_sym("id1", "do_work", "src/lib.rs");
+        store.upsert_symbol(&sym).unwrap();
+
+        let found = store.find_symbols_by_name("do_work").unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "do_work");
+    }
+
+    #[test]
+    fn test_upsert_is_idempotent() {
+        let (store, _tmp) = open_temp();
+        store.upsert_file("src/lib.rs", &LangId::Rust, 100).unwrap();
+        let sym = make_sym("id1", "fn_a", "src/lib.rs");
+        store.upsert_symbol(&sym).unwrap();
+        store.upsert_symbol(&sym).unwrap();
+        assert_eq!(store.find_symbols_by_name("fn_a").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_patterns_round_trip() {
+        let (store, _tmp) = open_temp();
+        store.upsert_file("src/lib.rs", &LangId::Rust, 50).unwrap();
+        let sym = make_sym("pid1", "async_fn", "src/lib.rs");
+        store.upsert_symbol(&sym).unwrap();
+        store
+            .update_symbol_patterns("pid1", r#"["lock","await"]"#)
+            .unwrap();
+
+        let all = store.all_symbols_with_patterns().unwrap();
+        let found = all.iter().find(|s| s.id == "pid1").unwrap();
+        assert!(found.patterns.contains(&"lock".to_string()));
+        assert!(found.patterns.contains(&"await".to_string()));
+    }
+
+    #[test]
+    fn test_call_edge_counts_fanin_fanout() {
+        let (store, _tmp) = open_temp();
+        store.upsert_file("a.rs", &LangId::Rust, 10).unwrap();
+        let caller = make_sym("caller", "caller", "a.rs");
+        let callee = make_sym("callee", "callee", "a.rs");
+        store.upsert_symbol(&caller).unwrap();
+        store.upsert_symbol(&callee).unwrap();
+        store
+            .upsert_edge("caller", "callee", &EdgeKind::Calls, 1.0, None)
+            .unwrap();
+
+        let counts = store.get_call_edge_counts().unwrap();
+        let (callee_fanin, _) = counts.get("callee").copied().unwrap_or((0, 0));
+        let (_, caller_fanout) = counts.get("caller").copied().unwrap_or((0, 0));
+        assert_eq!(callee_fanin, 1, "callee fanin must be 1");
+        assert_eq!(caller_fanout, 1, "caller fanout must be 1");
+    }
+
+    #[test]
+    fn test_cochange_upsert_and_query() {
+        let (store, _tmp) = open_temp();
+        let a = store.upsert_file("a.rs", &LangId::Rust, 10).unwrap();
+        let b = store.upsert_file("b.rs", &LangId::Rust, 10).unwrap();
+        store.upsert_cochange(a, b, 5, 0.8, 0.6).unwrap();
+
+        let pairs = store.get_all_cochange(3).unwrap();
+        assert_eq!(pairs.len(), 1);
+        assert!((pairs[0].strength - 0.8).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_schema_migration_patterns_column() {
+        // Open twice — second open must not fail even though patterns column exists
+        let tmp = TempDir::new().unwrap();
+        let _ = Store::open(tmp.path()).unwrap();
+        let _ = Store::open(tmp.path()).unwrap();
     }
 }

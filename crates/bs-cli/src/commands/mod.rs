@@ -226,3 +226,34 @@ pub fn has_pattern(patterns: &[String], name: &str) -> bool {
 pub fn emit(_ctx: &Context, content: &str) {
     print!("{}", content);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::has_pattern;
+
+    #[test]
+    fn test_has_pattern_found() {
+        let pats = vec!["lock".to_string(), "await".to_string()];
+        assert!(has_pattern(&pats, "lock"));
+        assert!(has_pattern(&pats, "await"));
+    }
+
+    #[test]
+    fn test_has_pattern_not_found() {
+        let pats = vec!["lock".to_string()];
+        assert!(!has_pattern(&pats, "block_on"));
+        assert!(!has_pattern(&pats, ""));
+    }
+
+    #[test]
+    fn test_has_pattern_empty_slice() {
+        assert!(!has_pattern(&[], "lock"));
+    }
+
+    #[test]
+    fn test_has_pattern_no_prefix_match() {
+        // "lock" must not match "block_on" or "locked"
+        let pats = vec!["block_on".to_string(), "locked".to_string()];
+        assert!(!has_pattern(&pats, "lock"));
+    }
+}
