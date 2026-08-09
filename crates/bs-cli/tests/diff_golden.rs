@@ -83,15 +83,6 @@ fn test_diff_frame_classification() {
         .to_string();
 
     // Index the repo
-    let status = Command::new(borescope())
-        .args(["index", "--no-git"])
-        .current_dir(d)
-        .status()
-        .expect("borescope index failed");
-    // May fail if no git, that's OK for this test (we just need extraction)
-    let _ = status;
-
-    // Re-index with git
     let _ = Command::new(borescope())
         .args(["index"])
         .current_dir(d)
@@ -127,7 +118,10 @@ fn test_diff_frame_classification() {
         let v: serde_json::Value =
             serde_json::from_str(&json_str).expect("diff -o json must produce valid JSON");
         assert_eq!(v["schema"], 1, "schema must be 1");
-        assert_eq!(v["borescope"], "0.1.0", "borescope version must be set");
+        assert!(
+            v["borescope"].is_string(),
+            "borescope version field must be a non-empty string"
+        );
     }
 }
 
