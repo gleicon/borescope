@@ -1,4 +1,4 @@
-use super::{emit, open_store, Context};
+use super::{emit, has_pattern, open_store, Context};
 use anyhow::Result;
 use bs_core::Symbol;
 use bs_git::Miner;
@@ -128,8 +128,7 @@ fn render_text(
     let high_risk: Vec<_> = syms
         .iter()
         .filter(|(s, fi, _)| {
-            let dangerous =
-                s.patterns.iter().any(|p| p == "lock") && s.patterns.iter().any(|p| p == "await");
+            let dangerous = has_pattern(&s.patterns, "lock") && has_pattern(&s.patterns, "await");
             dangerous
                 || (s.hotspot > 0.5 && s.complexity > 8)
                 || (s.hotspot > 0.7 && s.complexity > 3)
@@ -151,12 +150,12 @@ fn render_text(
                 None
             },
             if *fi > 8 { Some("central") } else { None },
-            if s.patterns.iter().any(|p| p == "lock") && s.patterns.iter().any(|p| p == "await") {
+            if has_pattern(&s.patterns, "lock") && has_pattern(&s.patterns, "await") {
                 Some("⚠ lock+await")
             } else {
                 None
             },
-            if s.patterns.iter().any(|p| p == "block_on") {
+            if has_pattern(&s.patterns, "block_on") {
                 Some("⚠ block_on")
             } else {
                 None
@@ -219,9 +218,9 @@ fn render_text(
     out.push_str("\nverdict:\n");
     let n_high = high_risk.len();
     let n_missed = missed_partners.len();
-    let has_dangerous = syms.iter().any(|(s, _, _)| {
-        s.patterns.iter().any(|p| p == "lock") && s.patterns.iter().any(|p| p == "await")
-    });
+    let has_dangerous = syms
+        .iter()
+        .any(|(s, _, _)| has_pattern(&s.patterns, "lock") && has_pattern(&s.patterns, "await"));
     if has_dangerous || n_high > 5 {
         out.push_str("  HIGH RISK — review high-risk symbols carefully before merge\n");
     } else if n_high > 0 || n_missed > 3 {
@@ -280,8 +279,7 @@ fn render_json(
     let high_risk: Vec<SymEntry> = syms
         .iter()
         .filter(|(s, fi, _)| {
-            let dangerous =
-                s.patterns.iter().any(|p| p == "lock") && s.patterns.iter().any(|p| p == "await");
+            let dangerous = has_pattern(&s.patterns, "lock") && has_pattern(&s.patterns, "await");
             dangerous || (s.hotspot > 0.5 && s.complexity > 8) || (s.hotspot > 0.7) || (*fi > 8)
         })
         .map(|(s, fi, _)| SymEntry {

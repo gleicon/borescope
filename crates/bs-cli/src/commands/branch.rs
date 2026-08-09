@@ -40,9 +40,7 @@ pub fn run(ctx: &Context, args: &BranchArgs) -> Result<()> {
     }
 
     let out = match ctx.output {
-        OutputFormat::Tree => {
-            tree::render_tree(&nodes, ctx.weight, ctx.no_color, Some(ctx.depth as usize))
-        }
+        OutputFormat::Tree => tree::render_tree(&nodes, ctx.no_color, Some(ctx.depth as usize)),
         OutputFormat::Folded => folded::render_folded(&nodes),
         OutputFormat::Json => json::render_json(
             "branch",

@@ -219,6 +219,10 @@ pub fn build_callers_tree_node(
     node
 }
 
+pub fn has_pattern(patterns: &[String], name: &str) -> bool {
+    patterns.iter().any(|p| p == name)
+}
+
 pub fn emit(_ctx: &Context, content: &str) {
     print!("{}", content);
 }

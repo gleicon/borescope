@@ -44,12 +44,7 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
 
     let out = match ctx.output {
         OutputFormat::Tree => {
-            let mut out = tree::render_tree(
-                &[root_node],
-                ctx.weight,
-                ctx.no_color,
-                Some(ctx.depth as usize),
-            );
+            let mut out = tree::render_tree(&[root_node], ctx.no_color, Some(ctx.depth as usize));
             if args.coupled && !cochange.is_empty() {
                 out.push_str("\nCo-changed files:\n");
                 for c in &cochange {

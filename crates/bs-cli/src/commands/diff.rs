@@ -37,9 +37,7 @@ pub fn run(ctx: &Context, args: &DiffArgs) -> Result<()> {
 
     let target = format!("{}..{}", rev1, rev2.unwrap_or("worktree"));
     let out = match ctx.output {
-        OutputFormat::Tree => {
-            tree::render_tree(&nodes, ctx.weight, ctx.no_color, Some(ctx.depth as usize))
-        }
+        OutputFormat::Tree => tree::render_tree(&nodes, ctx.no_color, Some(ctx.depth as usize)),
         OutputFormat::Json => json::render_json(
             "diff",
             &target,

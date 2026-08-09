@@ -228,7 +228,6 @@ fn parse_file(
 /// Write a parsed file into the DB — serial, no parsing.
 fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
     if pf.defs.is_empty() && pf.imports.is_empty() && pf.calls.is_empty() {
-        // Still upsert the file record
         store.upsert_file(&pf.rel_path, &pf.lang, pf.loc)?;
         return Ok(0);
     }
@@ -258,7 +257,6 @@ fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
         store.upsert_symbol(&sym)?;
         symbols_added += 1;
 
-        // Collect unique pattern kinds that fall within this def's span
         let mut def_patterns: Vec<String> = pf
             .patterns
             .iter()

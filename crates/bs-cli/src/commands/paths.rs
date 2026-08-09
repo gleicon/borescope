@@ -33,12 +33,9 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
     );
 
     let out = match ctx.output {
-        OutputFormat::Tree => tree::render_tree(
-            &[root_node],
-            ctx.weight,
-            ctx.no_color,
-            Some(ctx.depth as usize),
-        ),
+        OutputFormat::Tree => {
+            tree::render_tree(&[root_node], ctx.no_color, Some(ctx.depth as usize))
+        }
         OutputFormat::Folded => folded::render_folded(&[root_node]),
         OutputFormat::Json => {
             let cochange = store.get_coupled(&sym.file.to_string_lossy(), 0.3, 5)?;

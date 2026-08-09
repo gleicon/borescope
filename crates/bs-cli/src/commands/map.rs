@@ -11,7 +11,6 @@ pub fn run(ctx: &Context, _args: &MapArgs) -> Result<()> {
     let store = open_store(ctx)?;
 
     let out = if ctx.zoom == "fn" || ctx.zoom == "mod" {
-        // Symbol-level: group symbols by file
         let all_syms = store.all_symbols()?;
         let max_churn = all_syms
             .iter()
@@ -19,7 +18,6 @@ pub fn run(ctx: &Context, _args: &MapArgs) -> Result<()> {
             .fold(0.0f32, f32::max);
         let max_loc = all_syms.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 
-        // Group by file
         let mut by_file: HashMap<String, Vec<&bs_core::Symbol>> = HashMap::new();
         for sym in &all_syms {
             by_file
@@ -65,7 +63,7 @@ pub fn run(ctx: &Context, _args: &MapArgs) -> Result<()> {
 
         match ctx.output {
             OutputFormat::Tree | OutputFormat::Folded => {
-                tree::render_tree(&nodes, ctx.weight, ctx.no_color, Some(ctx.depth as usize))
+                tree::render_tree(&nodes, ctx.no_color, Some(ctx.depth as usize))
             }
             OutputFormat::Json => serde_json::to_string_pretty(&nodes).unwrap_or_default(),
             OutputFormat::Html => {
@@ -79,15 +77,12 @@ pub fn run(ctx: &Context, _args: &MapArgs) -> Result<()> {
             }
         }
     } else {
-        // File/package level
         let stats = match ctx.weight {
             Weight::Churn | Weight::Hotspot => store.get_map_by_churn()?,
             _ => store.get_all_file_stats()?,
         };
         match ctx.output {
-            OutputFormat::Tree | OutputFormat::Folded => {
-                tree::render_file_tree(&stats, ctx.weight, ctx.no_color)
-            }
+            OutputFormat::Tree | OutputFormat::Folded => tree::render_file_tree(&stats, ctx.weight),
             OutputFormat::Json => serde_json::to_string_pretty(&stats).unwrap_or_default(),
             OutputFormat::Html | OutputFormat::Tui => {
                 let max_c = stats.iter().map(|x| x.churn as f32).fold(0.0f32, f32::max);

@@ -1,4 +1,4 @@
-use super::{emit, open_store, Context};
+use super::{emit, has_pattern, open_store, Context};
 use anyhow::Result;
 use bs_core::FileStat;
 use clap::Args;
@@ -149,11 +149,11 @@ fn detect_semantic(
             continue;
         }
 
-        let has_lock = pats.iter().any(|p| p == "lock");
-        let has_await = pats.iter().any(|p| p == "await");
-        let has_block_on = pats.iter().any(|p| p == "block_on");
-        let has_spawn = pats.iter().any(|p| p == "spawn");
-        let has_loop = pats.iter().any(|p| p == "loop");
+        let has_lock = has_pattern(pats, "lock");
+        let has_await = has_pattern(pats, "await");
+        let has_block_on = has_pattern(pats, "block_on");
+        let has_spawn = has_pattern(pats, "spawn");
+        let has_loop = has_pattern(pats, "loop");
         let alloc_count = pats.iter().filter(|p| p.as_str() == "alloc").count();
 
         let (fanin, fanout) = edge_counts
@@ -381,7 +381,6 @@ fn format_report(report: &SmellReport, recommend: bool) -> String {
     if report.semantic.is_empty() {
         out.push_str("  (none)\n");
     } else {
-        // Group by kind, show count + top 3 examples each
         let mut by_kind: HashMap<String, Vec<&SemanticSmell>> = HashMap::new();
         for s in &report.semantic {
             by_kind.entry(s.kind.clone()).or_default().push(s);

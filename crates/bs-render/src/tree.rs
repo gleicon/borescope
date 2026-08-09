@@ -1,12 +1,7 @@
 use crate::{TreeNode, Weight};
 use bs_core::FileStat;
 
-pub fn render_tree(
-    nodes: &[TreeNode],
-    _weight: Weight,
-    no_color: bool,
-    collapse_depth: Option<usize>,
-) -> String {
+pub fn render_tree(nodes: &[TreeNode], no_color: bool, collapse_depth: Option<usize>) -> String {
     let mut out = String::new();
     for node in nodes {
         render_node(&mut out, node, "", true, true, no_color, collapse_depth, 0);
@@ -14,7 +9,7 @@ pub fn render_tree(
     out
 }
 
-pub fn render_file_tree(stats: &[FileStat], weight: Weight, _no_color: bool) -> String {
+pub fn render_file_tree(stats: &[FileStat], weight: Weight) -> String {
     let max_churn = stats.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
     let max_loc = stats.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 

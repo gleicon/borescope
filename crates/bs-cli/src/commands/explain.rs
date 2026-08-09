@@ -1,4 +1,4 @@
-use super::{emit, open_store, resolve_target, Context};
+use super::{emit, has_pattern, open_store, resolve_target, Context};
 use anyhow::Result;
 use clap::Args;
 
@@ -80,7 +80,6 @@ fn narrative(
     ));
     lines.push(String::new());
 
-    // Churn / hotspot narrative
     let heat = match sym.hotspot {
         h if h >= 0.8 => "🔥 very hot — changes constantly and recently",
         h if h >= 0.5 => "warm — moderate churn, somewhat recent",
@@ -92,7 +91,6 @@ fn narrative(
         sym.hotspot, sym.churn, heat
     ));
 
-    // Complexity narrative
     let complexity_note = match sym.complexity {
         c if c > 20 => "very high — hard to reason about, test coverage critical",
         c if c > 10 => "high — multiple code paths, review carefully before changing",
@@ -104,7 +102,6 @@ fn narrative(
         sym.complexity, complexity_note
     ));
 
-    // Call graph narrative
     lines.push(String::new());
     let fanin_note = match fanin {
         0 => "nothing calls this — possibly dead code or an entry point",
@@ -125,12 +122,11 @@ fn narrative(
     if !sym.patterns.is_empty() {
         lines.push(String::new());
         lines.push(format!("  patterns: {}", sym.patterns.join(", ")));
-        // Flag dangerous combos
-        let has_lock = sym.patterns.iter().any(|p| p == "lock");
-        let has_await = sym.patterns.iter().any(|p| p == "await");
-        let has_block = sym.patterns.iter().any(|p| p == "block_on");
-        let has_spawn = sym.patterns.iter().any(|p| p == "spawn");
-        let has_loop = sym.patterns.iter().any(|p| p == "loop");
+        let has_lock = has_pattern(&sym.patterns, "lock");
+        let has_await = has_pattern(&sym.patterns, "await");
+        let has_block = has_pattern(&sym.patterns, "block_on");
+        let has_spawn = has_pattern(&sym.patterns, "spawn");
+        let has_loop = has_pattern(&sym.patterns, "loop");
         if has_lock && has_await {
             lines.push(
                 "  ⚠ lock held across .await — risk of deadlock under async runtime".to_string(),
@@ -146,7 +142,6 @@ fn narrative(
         }
     }
 
-    // Co-change partners
     if !cochange.is_empty() {
         lines.push(String::new());
         lines.push("  co-changes with:".to_string());
@@ -174,21 +169,20 @@ fn narrative(
         );
     }
 
-    // Bottom-line verdict
     lines.push(String::new());
     lines.push("  verdict:".to_string());
-    let risk = risk_level(sym, fanin, fanout);
+    let risk = risk_level(sym, fanin);
     lines.push(format!("    {}", risk));
 
     lines.join("\n")
 }
 
-fn risk_level(sym: &bs_core::Symbol, fanin: u32, _fanout: u32) -> &'static str {
+fn risk_level(sym: &bs_core::Symbol, fanin: u32) -> &'static str {
     let hot = sym.hotspot > 0.6;
     let complex = sym.complexity > 10;
     let central = fanin > 5;
     let dangerous_pattern =
-        sym.patterns.iter().any(|p| p == "lock") && sym.patterns.iter().any(|p| p == "await");
+        has_pattern(&sym.patterns, "lock") && has_pattern(&sym.patterns, "await");
 
     match (hot, complex, central, dangerous_pattern) {
         (_, _, _, true) => "HIGH RISK — dangerous concurrency pattern detected",
