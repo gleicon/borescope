@@ -1,0 +1,134 @@
+mod commands;
+
+use anyhow::Result;
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+
+#[derive(Parser)]
+#[command(
+    name = "borescope",
+    version,
+    about = "Static call-path engine — flamegraphs from structure, not execution"
+)]
+struct Cli {
+    /// Repository root (default: discovered via .git)
+    #[arg(long, global = true)]
+    repo: Option<PathBuf>,
+
+    /// Maximum tree depth
+    #[arg(long, global = true, default_value = "3")]
+    depth: u32,
+
+    /// Zoom level: pkg | mod | fn
+    #[arg(long, global = true, default_value = "fn")]
+    zoom: String,
+
+    /// Weight: none | loc | fanin | churn | hotspot | diff
+    #[arg(long, global = true, default_value = "none")]
+    weight: bs_render::Weight,
+
+    /// Hide edges below confidence threshold
+    #[arg(long, global = true, default_value = "0.0")]
+    min_confidence: f32,
+
+    /// Output format: tree | folded | json | html
+    #[arg(short = 'o', long, global = true, default_value = "tree")]
+    output: bs_render::OutputFormat,
+
+    /// Plain ASCII tree (no ANSI color)
+    #[arg(long, global = true)]
+    no_color: bool,
+
+    /// Quiet output
+    #[arg(short, long, global = true)]
+    quiet: bool,
+
+    /// Verbose output
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Build or update .borescope/ index
+    Index(commands::index::IndexArgs),
+    /// Forward slice: everything reachable from target
+    Paths(commands::paths::PathsArgs),
+    /// Reverse slice: all callers of target
+    Callers(commands::callers::CallersArgs),
+    /// Call-tree diff between revisions
+    Diff(commands::diff::DiffArgs),
+    /// Diff from merge-base of a branch
+    Branch(commands::branch::BranchArgs),
+    /// Repository overview
+    Map(commands::map::MapArgs),
+    /// Ranked churn × complexity table
+    Hotspots(commands::hotspots::HotspotsArgs),
+    /// Co-change partners of a file or symbol
+    Coupled(commands::coupled::CoupledArgs),
+    /// Code-age view
+    Age(commands::age::AgeArgs),
+    /// Antipattern report
+    Smells(commands::smells::SmellsArgs),
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    let repo_root = match commands::resolve_repo(cli.repo.as_deref()) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let ctx = commands::Context {
+        repo_root,
+        depth: cli.depth,
+        zoom: cli.zoom,
+        weight: cli.weight,
+        min_confidence: cli.min_confidence,
+        output: cli.output,
+        no_color: cli.no_color,
+        quiet: cli.quiet,
+        verbose: cli.verbose,
+    };
+
+    let result = match &cli.command {
+        Commands::Index(args) => commands::index::run(&ctx, args),
+        Commands::Paths(args) => commands::paths::run(&ctx, args),
+        Commands::Callers(args) => commands::callers::run(&ctx, args),
+        Commands::Diff(args) => commands::diff::run(&ctx, args),
+        Commands::Branch(args) => commands::branch::run(&ctx, args),
+        Commands::Map(args) => commands::map::run(&ctx, args),
+        Commands::Hotspots(args) => commands::hotspots::run(&ctx, args),
+        Commands::Coupled(args) => commands::coupled::run(&ctx, args),
+        Commands::Age(args) => commands::age::run(&ctx, args),
+        Commands::Smells(args) => commands::smells::run(&ctx, args),
+    };
+
+    if let Err(e) = result {
+        match e.downcast_ref::<bs_core::Error>() {
+            Some(bs_core::Error::NoIndex) => {
+                eprintln!("error: no index found — run `borescope index` first");
+                std::process::exit(4);
+            }
+            Some(bs_core::Error::AmbiguousTarget(target, n)) => {
+                eprintln!("error: ambiguous target '{target}' ({n} candidates)");
+                std::process::exit(3);
+            }
+            Some(bs_core::Error::GrammarUnavailable(lang)) => {
+                eprintln!("error: grammar unavailable for {lang}");
+                std::process::exit(5);
+            }
+            _ => {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}

@@ -1,0 +1,1 @@
+/Users/gleicon/code/markdown/borescope/target/debug/libbs_core.rlib: /Users/gleicon/code/markdown/borescope/crates/bs-core/src/error.rs /Users/gleicon/code/markdown/borescope/crates/bs-core/src/lib.rs /Users/gleicon/code/markdown/borescope/crates/bs-core/src/model.rs /Users/gleicon/code/markdown/borescope/crates/bs-core/src/store.rs

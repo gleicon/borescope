@@ -1,0 +1,10 @@
+[package]
+name = "bs-link"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bs-core.workspace = true
+bs-extract.workspace = true
+anyhow.workspace = true
+rusqlite.workspace = true

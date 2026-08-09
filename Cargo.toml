@@ -1,0 +1,54 @@
+[workspace]
+members = [
+    "crates/bs-core",
+    "crates/bs-git",
+    "crates/bs-extract",
+    "crates/bs-link",
+    "crates/bs-render",
+    "crates/bs-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# Core deps
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+rayon = "1"
+walkdir = "2"
+ignore = "0.4"
+streaming-iterator = "0.1"
+
+# CLI
+clap = { version = "4", features = ["derive", "color"] }
+
+# Tree-sitter
+tree-sitter = "0.26"
+tree-sitter-go = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-python = "0.25"
+tree-sitter-javascript = "0.25"
+tree-sitter-typescript = "0.23"
+tree-sitter-java = "0.23"
+tree-sitter-ruby = "0.23"
+tree-sitter-c = "0.24"
+tree-sitter-cpp = "0.23"
+tree-sitter-bash = "0.25"
+
+# Intra-workspace
+bs-core = { path = "crates/bs-core" }
+bs-git  = { path = "crates/bs-git" }
+bs-extract = { path = "crates/bs-extract" }
+bs-link    = { path = "crates/bs-link" }
+bs-render  = { path = "crates/bs-render" }
+
+[profile.release]
+opt-level = 3
+strip = true
