@@ -140,6 +140,8 @@ pub struct Symbol {
     pub loc: u32,
     pub complexity: u32,
     pub hotspot: f32,
+    #[serde(default)]
+    pub patterns: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

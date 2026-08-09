@@ -5,6 +5,7 @@ use crate::{
 };
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
+use serde_json;
 
 const SCHEMA_VERSION: u32 = 1;
 
@@ -117,6 +118,22 @@ impl Store {
                 params![SCHEMA_VERSION.to_string()],
             )?;
         }
+
+        // Additive migration: add patterns column if missing (schema v1 → v2)
+        let has_patterns = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('symbols') WHERE name='patterns'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+            .unwrap_or(false);
+        if !has_patterns {
+            self.conn
+                .execute_batch("ALTER TABLE symbols ADD COLUMN patterns TEXT NOT NULL DEFAULT ''")?;
+        }
+
         Ok(())
     }
 
@@ -454,6 +471,61 @@ impl Store {
         Ok(self.conn.query_row("SELECT COUNT(*) FROM files", [], |r| r.get::<_, i64>(0))? as u64)
     }
 
+    pub fn update_symbol_patterns(&self, id: &str, patterns_json: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE symbols SET patterns=?2 WHERE id=?1",
+            params![id, patterns_json],
+        )?;
+        Ok(())
+    }
+
+    /// Returns all symbols with their patterns column populated — used by smells detectors.
+    pub fn all_symbols_with_patterns(&self) -> Result<Vec<Symbol>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT s.id,s.kind,s.name,s.qualified,f.path,s.span_start,s.span_end,
+                    s.lang,s.churn,s.age_days,s.loc,s.complexity,s.hotspot,s.patterns
+             FROM symbols s JOIN files f ON f.id=s.file_id",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            let mut sym = symbol_from_row(r)?;
+            let pat_str: String = r.get(13).unwrap_or_default();
+            sym.patterns = if pat_str.is_empty() {
+                vec![]
+            } else {
+                serde_json::from_str(&pat_str).unwrap_or_default()
+            };
+            Ok(sym)
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Returns (fanin, fanout) per symbol id for all `calls` edges.
+    pub fn get_call_edge_counts(&self) -> Result<std::collections::HashMap<String, (u32, u32)>> {
+        let mut counts: std::collections::HashMap<String, (u32, u32)> = std::collections::HashMap::new();
+        let mut stmt = self.conn.prepare(
+            "SELECT from_id, to_id FROM edges WHERE kind='calls'",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            let from: String = r.get(0)?;
+            let to: String = r.get(1)?;
+            Ok((from, to))
+        })?;
+        for row in rows {
+            let (from, to) = row?;
+            counts.entry(from).or_default().1 += 1; // fanout
+            counts.entry(to).or_default().0 += 1;   // fanin
+        }
+        Ok(counts)
+    }
+
+    pub fn update_symbol_signals(&self, id: &str, churn: u32, hotspot: f32) -> Result<()> {
+        self.conn.execute(
+            "UPDATE symbols SET churn=?2, hotspot=?3 WHERE id=?1",
+            params![id, churn, hotspot],
+        )?;
+        Ok(())
+    }
+
     pub fn file_loc(&self, path: &str) -> Result<u32> {
         Ok(self
             .conn
@@ -503,6 +575,7 @@ fn symbol_from_row_n(r: &rusqlite::Row<'_>, offset: usize) -> rusqlite::Result<S
         loc: r.get::<_, i64>(offset + 10)? as u32,
         complexity: r.get::<_, i64>(offset + 11)? as u32,
         hotspot: r.get(offset + 12)?,
+        patterns: vec![],
     })
 }
 

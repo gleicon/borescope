@@ -1,6 +1,6 @@
 use super::{build_tree_node, emit, open_store, resolve_target, Context};
 use anyhow::Result;
-use bs_render::{folded, html, json, tree, OutputFormat};
+use bs_render::{self, folded, html, json, tree, OutputFormat};
 use clap::Args;
 use std::collections::HashSet;
 
@@ -52,6 +52,9 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
             let path = write_html(&ctx.repo_root, "paths", &content)?;
             eprintln!("{}", path);
             return Ok(());
+        }
+        OutputFormat::Tui => {
+            return bs_render::tui::run_tui(&[root_node], &format!("paths {}", args.target), ctx.weight.describe());
         }
     };
 

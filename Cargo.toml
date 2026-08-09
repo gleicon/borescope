@@ -10,7 +10,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 
@@ -25,9 +25,15 @@ rayon = "1"
 walkdir = "2"
 ignore = "0.4"
 streaming-iterator = "0.1"
+libloading = "0.9"
+tempfile = "3"
 
 # CLI
 clap = { version = "4", features = ["derive", "color"] }
+
+# TUI
+ratatui = "0.29"
+crossterm = "0.28"
 
 # Tree-sitter
 tree-sitter = "0.26"

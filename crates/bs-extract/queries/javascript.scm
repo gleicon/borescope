@@ -31,3 +31,31 @@
 
 (import_declaration
   source: (string) @import)
+
+; --- Semantic pattern captures ---
+
+; Await expression
+(await_expression) @pattern.await
+
+; new expressions (allocation)
+(new_expression) @pattern.alloc
+
+; Timers (potential ordering issues)
+(call_expression
+  function: (identifier) @pattern.timer
+  (#match? @pattern.timer "^(setTimeout|setInterval|queueMicrotask)$"))
+
+; Worker / child_process spawn
+(call_expression
+  function: (member_expression
+    property: (property_identifier) @pattern.spawn)
+  (#match? @pattern.spawn "^(spawn|fork|exec|execSync|Worker)$"))
+(call_expression
+  function: (identifier) @pattern.spawn
+  (#match? @pattern.spawn "^(Worker)$"))
+
+; Loop constructs
+(for_statement) @pattern.loop
+(for_in_statement) @pattern.loop
+(while_statement) @pattern.loop
+(do_statement) @pattern.loop

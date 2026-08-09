@@ -63,6 +63,9 @@ pub fn run(ctx: &Context, args: &BranchArgs) -> Result<()> {
             eprintln!("{}", path);
             return Ok(());
         }
+        OutputFormat::Tui => {
+            return bs_render::tui::run_tui(&nodes, &format!("branch {}", args.name), ctx.weight.describe());
+        }
     };
 
     emit(ctx, &out);

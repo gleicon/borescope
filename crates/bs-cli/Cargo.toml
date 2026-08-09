@@ -7,6 +7,9 @@ edition.workspace = true
 name = "borescope"
 path = "src/main.rs"
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [dependencies]
 bs-core.workspace = true
 bs-git.workspace = true

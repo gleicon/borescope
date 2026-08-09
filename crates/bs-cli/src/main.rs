@@ -31,7 +31,7 @@ struct Cli {
     #[arg(long, global = true, default_value = "0.0")]
     min_confidence: f32,
 
-    /// Output format: tree | folded | json | html
+    /// Output format: tree | folded | json | html | tui
     #[arg(short = 'o', long, global = true, default_value = "tree")]
     output: bs_render::OutputFormat,
 
@@ -73,6 +73,10 @@ enum Commands {
     Age(commands::age::AgeArgs),
     /// Antipattern report
     Smells(commands::smells::SmellsArgs),
+    /// Plain-English explanation of a symbol's signals
+    Explain(commands::explain::ExplainArgs),
+    /// PR impact analysis: risk, blast radius, co-change warnings
+    ExplainPr(commands::explain_pr::ExplainPrArgs),
 }
 
 fn main() {
@@ -109,6 +113,8 @@ fn main() {
         Commands::Coupled(args) => commands::coupled::run(&ctx, args),
         Commands::Age(args) => commands::age::run(&ctx, args),
         Commands::Smells(args) => commands::smells::run(&ctx, args),
+        Commands::Explain(args) => commands::explain::run(&ctx, args),
+        Commands::ExplainPr(args) => commands::explain_pr::run(&ctx, args),
     };
 
     if let Err(e) = result {

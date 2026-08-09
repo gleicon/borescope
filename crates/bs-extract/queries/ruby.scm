@@ -29,3 +29,27 @@
     (string
       (string_content) @import))
   (#match? @_require "^require"))
+
+; --- Semantic pattern captures ---
+
+; Thread spawn
+(call
+  method: (identifier) @pattern.spawn
+  (#match? @pattern.spawn "^(new|start)$")
+  receiver: (constant) @_cls
+  (#match? @_cls "^Thread$"))
+
+; Mutex lock
+(call
+  method: (identifier) @pattern.lock
+  (#match? @pattern.lock "^(lock|synchronize|mon_enter)$"))
+
+; Allocating methods
+(call
+  method: (identifier) @pattern.alloc
+  (#match? @pattern.alloc "^(dup|clone|flatten|map|select|reject|collect)$"))
+
+; Loop constructs
+(while_modifier) @pattern.loop
+(until_modifier) @pattern.loop
+(for) @pattern.loop

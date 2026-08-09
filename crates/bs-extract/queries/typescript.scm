@@ -36,3 +36,21 @@
 ; Import declarations
 (import_statement
   source: (string) @import)
+
+; --- Semantic pattern captures ---
+
+(await_expression) @pattern.await
+(new_expression) @pattern.alloc
+
+(call_expression
+  function: (identifier) @pattern.timer
+  (#match? @pattern.timer "^(setTimeout|setInterval|queueMicrotask)$"))
+
+(call_expression
+  function: (member_expression
+    property: (property_identifier) @pattern.spawn)
+  (#match? @pattern.spawn "^(spawn|fork|exec|Worker)$"))
+
+(for_statement) @pattern.loop
+(for_in_statement) @pattern.loop
+(while_statement) @pattern.loop

@@ -2,6 +2,7 @@ pub mod folded;
 pub mod html;
 pub mod json;
 pub mod tree;
+pub mod tui;
 
 use bs_core::{FileStat, Symbol};
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,7 @@ pub enum OutputFormat {
     Folded,
     Json,
     Html,
+    Tui,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
@@ -27,6 +29,17 @@ pub enum Weight {
 }
 
 impl Weight {
+    pub fn describe(&self) -> &'static str {
+        match self {
+            Weight::None      => "score: none (all 0.0 — use --weight to enable)",
+            Weight::Loc       => "score: loc  (lines of code, normalized 0–1)",
+            Weight::Fanin     => "score: fanin  (how many callers, normalized 0–1)",
+            Weight::Churn     => "score: churn  (git commit frequency, normalized 0–1)",
+            Weight::Hotspot   => "score: hotspot  (churn × recency, 0=cold 1=hot)",
+            Weight::Diff      => "score: diff  (mark: + added  - removed  ~ changed)",
+        }
+    }
+
     pub fn score_file(&self, stat: &FileStat, max_churn: f32, max_loc: f32) -> f32 {
         match self {
             Weight::None => 0.0,

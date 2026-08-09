@@ -1,2 +1,2 @@
 mod miner;
-pub use miner::Miner;
+pub use miner::{parse_diff_ranges, Miner};

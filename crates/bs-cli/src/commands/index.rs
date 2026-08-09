@@ -57,6 +57,25 @@ pub fn run(ctx: &Context, args: &IndexArgs) -> Result<()> {
         );
     }
 
+    // Span-level git attribution: attribute churn to individual symbol spans
+    if args.git {
+        if !ctx.quiet {
+            eprintln!("Attributing spans...");
+        }
+        let miner = Miner::new(ctx.repo_root.clone());
+        let all_stats = store.get_all_file_stats()?;
+        let mut attributed = 0usize;
+        for stat in &all_stats {
+            if store.symbols_for_file(&stat.path).map(|s| s.len()).unwrap_or(0) > 0 {
+                let _ = miner.mine_symbol_spans(&store, &stat.path);
+                attributed += 1;
+            }
+        }
+        if ctx.verbose {
+            eprintln!("  attributed {} files", attributed);
+        }
+    }
+
     let elapsed = t0.elapsed();
     if !ctx.quiet {
         eprintln!("Done in {:.1}s", elapsed.as_secs_f64());

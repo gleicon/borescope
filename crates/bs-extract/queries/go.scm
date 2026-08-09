@@ -21,3 +21,32 @@
 ; Import paths
 (import_spec
   path: (interpreted_string_literal) @import)
+
+; --- Semantic pattern captures ---
+
+; Goroutine spawn
+(go_statement) @pattern.spawn
+
+; Mutex/RwMutex lock
+(call_expression
+  function: (selector_expression
+    field: (field_identifier) @pattern.lock)
+  (#match? @pattern.lock "^(Lock|RLock|TryLock|TryRLock)$"))
+
+; Allocating builtins
+(call_expression
+  function: (identifier) @pattern.alloc
+  (#match? @pattern.alloc "^(make|new|append)$"))
+
+; Allocating method calls
+(call_expression
+  function: (selector_expression
+    field: (field_identifier) @pattern.alloc)
+  (#match? @pattern.alloc "^(Sprintf|Errorf|Marshal|Unmarshal|Clone)$"))
+
+; Channel send/recv
+(send_statement) @pattern.chan
+(receive_statement) @pattern.chan
+
+; Loop constructs
+(for_statement) @pattern.loop

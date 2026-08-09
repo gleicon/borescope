@@ -1,6 +1,8 @@
 pub mod age;
 pub mod branch;
 pub mod callers;
+pub mod explain;
+pub mod explain_pr;
 pub mod coupled;
 pub mod diff;
 pub mod hotspots;
@@ -98,8 +100,16 @@ pub fn resolve_target(store: &Store, target: &str) -> Result<bs_core::Symbol> {
     match candidates.len() {
         0 => bail!("unknown target: {}", target),
         1 => Ok(candidates.remove(0)),
-        n => {
-            let json = serde_json::to_string(&candidates.iter().map(|s| &s.qualified).collect::<Vec<_>>())?;
+        _ => {
+            // Deduplicate by qualified name — same file:name but different kinds (fn vs method)
+            // collapse to a single result rather than forcing the user to disambiguate.
+            let mut seen = std::collections::HashSet::new();
+            candidates.retain(|s| seen.insert(s.qualified.clone()));
+            if candidates.len() == 1 {
+                return Ok(candidates.remove(0));
+            }
+            let n = candidates.len();
+            let json = serde_json::to_string(&candidates.iter().map(|s| format!("{}  ({})", s.qualified, s.kind)).collect::<Vec<_>>())?;
             eprintln!("{}", json);
             Err(bs_core::Error::AmbiguousTarget(target.to_string(), n).into())
         }
