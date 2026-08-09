@@ -38,6 +38,7 @@ pub struct TruncatedInfo {
     pub nodes_omitted: usize,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_json(
     cmd: &str,
     target: &str,

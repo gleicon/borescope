@@ -3,7 +3,7 @@ use bs_core::FileStat;
 
 pub fn render_tree(
     nodes: &[TreeNode],
-    weight: Weight,
+    _weight: Weight,
     no_color: bool,
     collapse_depth: Option<usize>,
 ) -> String {
@@ -14,7 +14,7 @@ pub fn render_tree(
     out
 }
 
-pub fn render_file_tree(stats: &[FileStat], weight: Weight, no_color: bool) -> String {
+pub fn render_file_tree(stats: &[FileStat], weight: Weight, _no_color: bool) -> String {
     let max_churn = stats.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
     let max_loc = stats.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 
@@ -33,6 +33,7 @@ pub fn render_file_tree(stats: &[FileStat], weight: Weight, no_color: bool) -> S
     out
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_node(
     out: &mut String,
     node: &TreeNode,
@@ -101,8 +102,8 @@ fn render_node(
         if depth + 1 >= max_depth {
             let child_prefix = format!("{}{}", prefix, if is_last { "   " } else { "│  " });
             out.push_str(&format!(
-                "{}▸ ({} more)\n",
-                format!("{}└─ ", child_prefix),
+                "{}└─ ▸ ({} more)\n",
+                child_prefix,
                 node.children.len()
             ));
             return;
