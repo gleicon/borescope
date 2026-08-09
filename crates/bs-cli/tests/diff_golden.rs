@@ -111,7 +111,7 @@ fn test_diff_frame_classification() {
     // Bar unchanged but in a changed file → may appear without marker
     // We verify the diff runs without crashing and produces output
     assert!(
-        out.status.success() || out.status.code() == Some(0) || !stdout.is_empty() || true,
+        out.status.success() || !stdout.is_empty(),
         "diff should produce output or exit cleanly"
     );
 

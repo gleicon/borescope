@@ -7,7 +7,6 @@ use crate::{
 use bs_core::{EdgeKind, LangId, Result, Store, Symbol, SymbolKind};
 use ignore::WalkBuilder;
 use rayon::prelude::*;
-use serde_json;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -205,8 +204,8 @@ fn parse_file(
                 }
             } else if cap_name == IMPORT {
                 imports.push(text);
-            } else if cap_name.starts_with(PATTERN_PREFIX) {
-                let kind = cap_name[PATTERN_PREFIX.len()..].to_string();
+            } else if let Some(stripped) = cap_name.strip_prefix(PATTERN_PREFIX) {
+                let kind = stripped.to_string();
                 patterns.push(RawPattern {
                     kind,
                     line: start_line,
@@ -297,7 +296,7 @@ fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
     Ok(symbols_added)
 }
 
-fn enclosing_def<'a>(defs: &'a [RawDef], line: u32) -> Option<&'a RawDef> {
+fn enclosing_def(defs: &[RawDef], line: u32) -> Option<&RawDef> {
     defs.iter()
         .filter(|d| d.start_line <= line && d.end_line >= line)
         .min_by_key(|d| d.end_line - d.start_line)
@@ -329,9 +328,10 @@ fn compute_complexity(tree: &tree_sitter::Tree, source: &[u8], start: u32, end: 
     let mut max_depth = 0u32;
     let mut cursor = tree.root_node().walk();
 
+    #[allow(clippy::too_many_arguments)]
     fn visit(
         cursor: &mut tree_sitter::TreeCursor<'_>,
-        source: &[u8],
+        _source: &[u8],
         start: u32,
         end: u32,
         branch_kinds: &[&str],
@@ -341,18 +341,16 @@ fn compute_complexity(tree: &tree_sitter::Tree, source: &[u8], start: u32, end: 
     ) {
         let node = cursor.node();
         let node_line = node.start_position().row as u32 + 1;
-        if node_line >= start && node_line <= end {
-            if branch_kinds.contains(&node.kind()) {
-                *count += 1;
-                if depth > *max_depth {
-                    *max_depth = depth;
-                }
+        if node_line >= start && node_line <= end && branch_kinds.contains(&node.kind()) {
+            *count += 1;
+            if depth > *max_depth {
+                *max_depth = depth;
             }
         }
         if cursor.goto_first_child() {
             visit(
                 cursor,
-                source,
+                _source,
                 start,
                 end,
                 branch_kinds,
@@ -363,7 +361,7 @@ fn compute_complexity(tree: &tree_sitter::Tree, source: &[u8], start: u32, end: 
             while cursor.goto_next_sibling() {
                 visit(
                     cursor,
-                    source,
+                    _source,
                     start,
                     end,
                     branch_kinds,
