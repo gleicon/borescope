@@ -91,7 +91,11 @@ fn build_diff_nodes(
             };
 
             let mark = if changed_set.contains(sym.file.to_str().unwrap_or("")) {
-                if span_touched > 0 { Some("~".to_string()) } else { None }
+                if span_touched > 0 {
+                    Some("~".to_string())
+                } else {
+                    None
+                }
             } else {
                 None
             };
@@ -115,9 +119,7 @@ fn build_diff_nodes(
 fn sym_lines_touched(span: &(u32, u32), touched: Option<&HashSet<u32>>) -> u32 {
     match touched {
         None => 0,
-        Some(set) => {
-            (span.0..=span.1).filter(|l| set.contains(l)).count() as u32
-        }
+        Some(set) => (span.0..=span.1).filter(|l| set.contains(l)).count() as u32,
     }
 }
 

@@ -12,14 +12,17 @@ pub fn link(store: &Store) -> Result<LinkStats> {
     // name -> [symbol_ids]
     let mut by_name: HashMap<String, Vec<String>> = HashMap::new();
     for sym in &symbols {
-        by_name.entry(sym.name.clone()).or_default().push(sym.id.clone());
+        by_name
+            .entry(sym.name.clone())
+            .or_default()
+            .push(sym.id.clone());
     }
 
     // Resolve unresolved: edges (from_id, "unresolved:<name>") -> real edges
     let unresolved: Vec<(String, String)> = {
-        let mut stmt = store.conn.prepare(
-            "SELECT from_id, to_id FROM edges WHERE to_id LIKE 'unresolved:%'",
-        )?;
+        let mut stmt = store
+            .conn
+            .prepare("SELECT from_id, to_id FROM edges WHERE to_id LIKE 'unresolved:%'")?;
         let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()?
     };
@@ -61,7 +64,10 @@ pub fn link(store: &Store) -> Result<LinkStats> {
         }
     }
 
-    Ok(LinkStats { resolved, left_unresolved })
+    Ok(LinkStats {
+        resolved,
+        left_unresolved,
+    })
 }
 
 pub struct LinkStats {

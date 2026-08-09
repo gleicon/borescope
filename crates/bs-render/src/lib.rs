@@ -31,12 +31,12 @@ pub enum Weight {
 impl Weight {
     pub fn describe(&self) -> &'static str {
         match self {
-            Weight::None      => "score: none (all 0.0 — use --weight to enable)",
-            Weight::Loc       => "score: loc  (lines of code, normalized 0–1)",
-            Weight::Fanin     => "score: fanin  (how many callers, normalized 0–1)",
-            Weight::Churn     => "score: churn  (git commit frequency, normalized 0–1)",
-            Weight::Hotspot   => "score: hotspot  (churn × recency, 0=cold 1=hot)",
-            Weight::Diff      => "score: diff  (mark: + added  - removed  ~ changed)",
+            Weight::None => "score: none (all 0.0 — use --weight to enable)",
+            Weight::Loc => "score: loc  (lines of code, normalized 0–1)",
+            Weight::Fanin => "score: fanin  (how many callers, normalized 0–1)",
+            Weight::Churn => "score: churn  (git commit frequency, normalized 0–1)",
+            Weight::Hotspot => "score: hotspot  (churn × recency, 0=cold 1=hot)",
+            Weight::Diff => "score: diff  (mark: + added  - removed  ~ changed)",
         }
     }
 
@@ -75,7 +75,13 @@ pub struct TreeNode {
 }
 
 impl TreeNode {
-    pub fn leaf(id: String, name: String, qualified: String, file: String, span: (u32, u32)) -> Self {
+    pub fn leaf(
+        id: String,
+        name: String,
+        qualified: String,
+        file: String,
+        span: (u32, u32),
+    ) -> Self {
         Self {
             id,
             name,

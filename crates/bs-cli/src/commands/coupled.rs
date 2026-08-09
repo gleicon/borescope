@@ -32,7 +32,11 @@ pub fn run(ctx: &Context, args: &CoupledArgs) -> Result<()> {
                 out.push_str("  (none)\n");
             }
             for c in &results {
-                let partner = if c.file_a == args.target { &c.file_b } else { &c.file_a };
+                let partner = if c.file_a == args.target {
+                    &c.file_b
+                } else {
+                    &c.file_a
+                };
                 out.push_str(&format!(
                     "  {} ← strength {:.2}, support {}\n",
                     partner, c.strength, c.support

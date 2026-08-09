@@ -4,8 +4,8 @@ use crate::{
     Result,
 };
 use rusqlite::{params, Connection};
-use std::path::{Path, PathBuf};
 use serde_json;
+use std::path::{Path, PathBuf};
 
 const SCHEMA_VERSION: u32 = 1;
 
@@ -85,7 +85,10 @@ impl Store {
         let db_path = dir.join("index.db");
         let conn = Connection::open(&db_path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
-        let store = Self { conn, root: repo_root.to_path_buf() };
+        let store = Self {
+            conn,
+            root: repo_root.to_path_buf(),
+        };
         store.init_schema()?;
         Ok(store)
     }
@@ -97,7 +100,10 @@ impl Store {
         }
         let conn = Connection::open(&db_path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
-        Ok(Self { conn, root: repo_root.to_path_buf() })
+        Ok(Self {
+            conn,
+            root: repo_root.to_path_buf(),
+        })
     }
 
     fn init_schema(&self) -> Result<()> {
@@ -130,8 +136,9 @@ impl Store {
             .map(|n| n > 0)
             .unwrap_or(false);
         if !has_patterns {
-            self.conn
-                .execute_batch("ALTER TABLE symbols ADD COLUMN patterns TEXT NOT NULL DEFAULT ''")?;
+            self.conn.execute_batch(
+                "ALTER TABLE symbols ADD COLUMN patterns TEXT NOT NULL DEFAULT ''",
+            )?;
         }
 
         Ok(())
@@ -165,11 +172,11 @@ impl Store {
              ON CONFLICT(path) DO UPDATE SET lang=excluded.lang, loc=excluded.loc",
             params![path, lang.to_string(), loc],
         )?;
-        let id = self.conn.query_row(
-            "SELECT id FROM files WHERE path=?1",
-            params![path],
-            |r| r.get(0),
-        )?;
+        let id = self
+            .conn
+            .query_row("SELECT id FROM files WHERE path=?1", params![path], |r| {
+                r.get(0)
+            })?;
         Ok(id)
     }
 
@@ -235,9 +242,7 @@ impl Store {
     // ---------- symbols ----------
 
     pub fn upsert_symbol(&self, sym: &Symbol) -> Result<()> {
-        let file_id = self
-            .file_id(sym.file.to_str().unwrap_or(""))?
-            .unwrap_or(0);
+        let file_id = self.file_id(sym.file.to_str().unwrap_or(""))?.unwrap_or(0);
         self.conn.execute(
             "INSERT INTO symbols(id,kind,name,qualified,file_id,span_start,span_end,lang,churn,age_days,loc,complexity,hotspot)
              VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)
@@ -371,14 +376,17 @@ impl Store {
     }
 
     pub fn get_symbol(&self, id: &str) -> Result<Option<Symbol>> {
-        let row = self.conn.query_row(
-            "SELECT s.id,s.kind,s.name,s.qualified,f.path,s.span_start,s.span_end,
+        let row = self
+            .conn
+            .query_row(
+                "SELECT s.id,s.kind,s.name,s.qualified,f.path,s.span_start,s.span_end,
                     s.lang,s.churn,s.age_days,s.loc,s.complexity,s.hotspot
              FROM symbols s JOIN files f ON f.id=s.file_id
              WHERE s.id=?1",
-            params![id],
-            symbol_from_row,
-        ).optional()?;
+                params![id],
+                symbol_from_row,
+            )
+            .optional()?;
         Ok(row)
     }
 
@@ -394,16 +402,19 @@ impl Store {
     }
 
     pub fn find_symbol_at_line(&self, file: &str, line: u32) -> Result<Option<Symbol>> {
-        let row = self.conn.query_row(
-            "SELECT s.id,s.kind,s.name,s.qualified,f.path,s.span_start,s.span_end,
+        let row = self
+            .conn
+            .query_row(
+                "SELECT s.id,s.kind,s.name,s.qualified,f.path,s.span_start,s.span_end,
                     s.lang,s.churn,s.age_days,s.loc,s.complexity,s.hotspot
              FROM symbols s JOIN files f ON f.id=s.file_id
              WHERE f.path=?1 AND s.span_start<=?2 AND s.span_end>=?2
              ORDER BY (s.span_end-s.span_start) ASC
              LIMIT 1",
-            params![file, line],
-            symbol_from_row,
-        ).optional()?;
+                params![file, line],
+                symbol_from_row,
+            )
+            .optional()?;
         Ok(row)
     }
 
@@ -464,11 +475,16 @@ impl Store {
     }
 
     pub fn symbol_count(&self) -> Result<u64> {
-        Ok(self.conn.query_row("SELECT COUNT(*) FROM symbols", [], |r| r.get::<_, i64>(0))? as u64)
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM symbols", [], |r| r.get::<_, i64>(0))?
+            as u64)
     }
 
     pub fn file_count(&self) -> Result<u64> {
-        Ok(self.conn.query_row("SELECT COUNT(*) FROM files", [], |r| r.get::<_, i64>(0))? as u64)
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM files", [], |r| r.get::<_, i64>(0))? as u64)
     }
 
     pub fn update_symbol_patterns(&self, id: &str, patterns_json: &str) -> Result<()> {
@@ -501,10 +517,11 @@ impl Store {
 
     /// Returns (fanin, fanout) per symbol id for all `calls` edges.
     pub fn get_call_edge_counts(&self) -> Result<std::collections::HashMap<String, (u32, u32)>> {
-        let mut counts: std::collections::HashMap<String, (u32, u32)> = std::collections::HashMap::new();
-        let mut stmt = self.conn.prepare(
-            "SELECT from_id, to_id FROM edges WHERE kind='calls'",
-        )?;
+        let mut counts: std::collections::HashMap<String, (u32, u32)> =
+            std::collections::HashMap::new();
+        let mut stmt = self
+            .conn
+            .prepare("SELECT from_id, to_id FROM edges WHERE kind='calls'")?;
         let rows = stmt.query_map([], |r| {
             let from: String = r.get(0)?;
             let to: String = r.get(1)?;
@@ -513,7 +530,7 @@ impl Store {
         for row in rows {
             let (from, to) = row?;
             counts.entry(from).or_default().1 += 1; // fanout
-            counts.entry(to).or_default().0 += 1;   // fanin
+            counts.entry(to).or_default().0 += 1; // fanin
         }
         Ok(counts)
     }

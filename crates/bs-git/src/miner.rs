@@ -42,7 +42,9 @@ impl Miner {
             }
             for f in &files {
                 *file_churn.entry(f.clone()).or_default() += 1;
-                let e = file_last.entry(f.clone()).or_insert((commit.ts, commit.sha.clone()));
+                let e = file_last
+                    .entry(f.clone())
+                    .or_insert((commit.ts, commit.sha.clone()));
                 if commit.ts > e.0 {
                     *e = (commit.ts, commit.sha.clone());
                 }
@@ -70,7 +72,14 @@ impl Miner {
             let lang = LangId::from_path(Path::new(path));
             let loc = count_loc_cached(store, path);
             let file_id = store.upsert_file(path, &lang, loc)?;
-            store.upsert_git_stat(file_id, churn, age_days, Some(last_sha), Some(last_ts), hotspot)?;
+            store.upsert_git_stat(
+                file_id,
+                churn,
+                age_days,
+                Some(last_sha),
+                Some(last_ts),
+                hotspot,
+            )?;
         }
 
         // co-change matrix
@@ -147,7 +156,11 @@ impl Miner {
             } else {
                 0
             };
-            commits.push(CommitMeta { sha, ts, parent_count });
+            commits.push(CommitMeta {
+                sha,
+                ts,
+                parent_count,
+            });
         }
         Ok(commits)
     }
@@ -251,7 +264,11 @@ impl Miner {
     }
 
     /// Returns (file, set_of_touched_new_lines) for each file changed between rev1 and rev2.
-    pub fn diff_line_ranges(&self, rev1: &str, rev2: Option<&str>) -> Result<std::collections::HashMap<String, std::collections::HashSet<u32>>> {
+    pub fn diff_line_ranges(
+        &self,
+        rev1: &str,
+        rev2: Option<&str>,
+    ) -> Result<std::collections::HashMap<String, std::collections::HashSet<u32>>> {
         let args: Vec<String> = match rev2 {
             Some(r2) => vec!["diff".into(), "--unified=0".into(), rev1.into(), r2.into()],
             None => vec!["diff".into(), "--unified=0".into(), rev1.into()],
@@ -261,11 +278,7 @@ impl Miner {
     }
 
     pub fn merge_base(&self, rev1: &str, rev2: &str) -> Result<String> {
-        let out = self.git(&[
-            "merge-base".to_string(),
-            rev1.to_string(),
-            rev2.to_string(),
-        ])?;
+        let out = self.git(&["merge-base".to_string(), rev1.to_string(), rev2.to_string()])?;
         Ok(out.trim().to_string())
     }
 
@@ -326,7 +339,9 @@ fn parse_hunk_new(hunk: &str) -> Option<(u32, u32)> {
     // Format after leading "@@ " is "-old +new @@..."
     let plus = hunk.find('+')? + 1;
     let rest = &hunk[plus..];
-    let end = rest.find(|c: char| c == ' ' || c == '@').unwrap_or(rest.len());
+    let end = rest
+        .find(|c: char| c == ' ' || c == '@')
+        .unwrap_or(rest.len());
     let range = &rest[..end];
     if let Some(comma) = range.find(',') {
         let start: u32 = range[..comma].parse().ok()?;
@@ -339,8 +354,11 @@ fn parse_hunk_new(hunk: &str) -> Option<(u32, u32)> {
 }
 
 /// Parse a `git diff --unified=0` output into file -> set of touched new lines.
-pub fn parse_diff_ranges(diff: &str) -> std::collections::HashMap<String, std::collections::HashSet<u32>> {
-    let mut result: std::collections::HashMap<String, std::collections::HashSet<u32>> = std::collections::HashMap::new();
+pub fn parse_diff_ranges(
+    diff: &str,
+) -> std::collections::HashMap<String, std::collections::HashSet<u32>> {
+    let mut result: std::collections::HashMap<String, std::collections::HashSet<u32>> =
+        std::collections::HashMap::new();
     let mut current_file = String::new();
 
     for line in diff.lines() {
@@ -450,8 +468,7 @@ mod tests {
         // Use get_all_cochange with min_support=1
         let cc = store.get_all_cochange(1).unwrap();
         let pair = cc.iter().find(|c| {
-            (c.file_a == "a.py" && c.file_b == "b.py")
-                || (c.file_a == "b.py" && c.file_b == "a.py")
+            (c.file_a == "a.py" && c.file_b == "b.py") || (c.file_a == "b.py" && c.file_b == "a.py")
         });
         assert!(pair.is_some(), "expected a.py↔b.py co-change pair");
         let pair = pair.unwrap();
@@ -485,8 +502,13 @@ mod tests {
             let store = Store::open(tmp.path()).unwrap();
             let miner = Miner::new(tmp.path().to_path_buf());
             miner.mine(&store, true).unwrap();
-            store.get_all_file_stats().unwrap()
-                .into_iter().find(|s| s.path == "a.py").unwrap().churn
+            store
+                .get_all_file_stats()
+                .unwrap()
+                .into_iter()
+                .find(|s| s.path == "a.py")
+                .unwrap()
+                .churn
         };
 
         // Delete .borescope/ and reindex
@@ -496,10 +518,18 @@ mod tests {
             let store = Store::open(tmp.path()).unwrap();
             let miner = Miner::new(tmp.path().to_path_buf());
             miner.mine(&store, true).unwrap();
-            store.get_all_file_stats().unwrap()
-                .into_iter().find(|s| s.path == "a.py").unwrap().churn
+            store
+                .get_all_file_stats()
+                .unwrap()
+                .into_iter()
+                .find(|s| s.path == "a.py")
+                .unwrap()
+                .churn
         };
 
-        assert_eq!(churn_first, churn_second, "delete+reindex must produce same churn");
+        assert_eq!(
+            churn_first, churn_second,
+            "delete+reindex must produce same churn"
+        );
     }
 }

@@ -1,10 +1,10 @@
 pub mod age;
 pub mod branch;
 pub mod callers;
-pub mod explain;
-pub mod explain_pr;
 pub mod coupled;
 pub mod diff;
+pub mod explain;
+pub mod explain_pr;
 pub mod hotspots;
 pub mod index;
 pub mod map;
@@ -63,10 +63,16 @@ impl Target {
             let file = s[..colon_pos].to_string();
             let after = s[colon_pos + 1..].to_string();
             if !file.is_empty() && (file.contains('/') || file.contains('.')) {
-                return Self { file: Some(file), name_or_line: after };
+                return Self {
+                    file: Some(file),
+                    name_or_line: after,
+                };
             }
         }
-        Self { file: None, name_or_line: s.to_string() }
+        Self {
+            file: None,
+            name_or_line: s.to_string(),
+        }
     }
 }
 
@@ -109,7 +115,12 @@ pub fn resolve_target(store: &Store, target: &str) -> Result<bs_core::Symbol> {
                 return Ok(candidates.remove(0));
             }
             let n = candidates.len();
-            let json = serde_json::to_string(&candidates.iter().map(|s| format!("{}  ({})", s.qualified, s.kind)).collect::<Vec<_>>())?;
+            let json = serde_json::to_string(
+                &candidates
+                    .iter()
+                    .map(|s| format!("{}  ({})", s.qualified, s.kind))
+                    .collect::<Vec<_>>(),
+            )?;
             eprintln!("{}", json);
             Err(bs_core::Error::AmbiguousTarget(target.to_string(), n).into())
         }
@@ -144,7 +155,14 @@ pub fn build_tree_node(
     if let Ok(callees) = store.get_callees(&sym.id, min_conf) {
         for (callee, conf) in callees {
             let mut child = build_tree_node(
-                store, &callee, depth + 1, max_depth, min_conf, weight, max_weight, visited,
+                store,
+                &callee,
+                depth + 1,
+                max_depth,
+                min_conf,
+                weight,
+                max_weight,
+                visited,
             );
             child.confidence = conf;
             node.children.push(child);
@@ -182,7 +200,14 @@ pub fn build_callers_tree_node(
     if let Ok(callers) = store.get_callers(&sym.id, min_conf) {
         for (caller, conf) in callers {
             let mut child = build_callers_tree_node(
-                store, &caller, depth + 1, max_depth, min_conf, weight, max_weight, visited,
+                store,
+                &caller,
+                depth + 1,
+                max_depth,
+                min_conf,
+                weight,
+                max_weight,
+                visited,
             );
             child.confidence = conf;
             node.children.push(child);

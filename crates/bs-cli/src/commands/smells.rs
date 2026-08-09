@@ -86,10 +86,15 @@ fn detect_shotgun_surgery(
     }
     for (file, count) in partner_count {
         if count >= min_partners {
-            report.shotgun_surgery.push(ShotgunEntry { file, partners: count });
+            report.shotgun_surgery.push(ShotgunEntry {
+                file,
+                partners: count,
+            });
         }
     }
-    report.shotgun_surgery.sort_by(|a, b| b.partners.cmp(&a.partners));
+    report
+        .shotgun_surgery
+        .sort_by(|a, b| b.partners.cmp(&a.partners));
 }
 
 fn detect_god_file(stats: &[FileStat], report: &mut SmellReport) {
@@ -127,7 +132,9 @@ fn detect_tangled_pair(
 ) {
     for c in cochange {
         if c.strength >= min_strength && c.strength_rev >= min_strength {
-            report.tangled_pair.push((c.file_a.clone(), c.file_b.clone()));
+            report
+                .tangled_pair
+                .push((c.file_a.clone(), c.file_b.clone()));
         }
     }
 }
@@ -171,7 +178,8 @@ fn detect_semantic(
                 kind: "sync_in_async".to_string(),
                 symbol: sym.qualified.clone(),
                 file: sym.file.display().to_string(),
-                detail: "block_on / run_until_complete inside async context starves executor".to_string(),
+                detail: "block_on / run_until_complete inside async context starves executor"
+                    .to_string(),
             });
         }
 
@@ -181,7 +189,10 @@ fn detect_semantic(
                 kind: "alloc_in_hotspot".to_string(),
                 symbol: sym.qualified.clone(),
                 file: sym.file.display().to_string(),
-                detail: format!("{} alloc calls in hotspot symbol (hotspot={:.2})", alloc_count, sym.hotspot),
+                detail: format!(
+                    "{} alloc calls in hotspot symbol (hotspot={:.2})",
+                    alloc_count, sym.hotspot
+                ),
             });
         }
 
@@ -224,9 +235,23 @@ fn detect_semantic(
 }
 
 const SECURITY_KEYWORDS: &[&str] = &[
-    "auth", "crypto", "token", "secret", "password", "passwd",
-    "jwt", "oauth", "session", "credential", "key", "cert", "tls", "ssl",
-    "permission", "acl", "policy",
+    "auth",
+    "crypto",
+    "token",
+    "secret",
+    "password",
+    "passwd",
+    "jwt",
+    "oauth",
+    "session",
+    "credential",
+    "key",
+    "cert",
+    "tls",
+    "ssl",
+    "permission",
+    "acl",
+    "policy",
 ];
 
 fn generate_recommendations(cochange: &[bs_core::CoChange], report: &mut SmellReport) {
@@ -293,13 +318,13 @@ fn percentile(mut values: Vec<f64>, p: f64) -> f64 {
 
 fn semantic_kind_desc(kind: &str) -> &'static str {
     match kind {
-        "lock_across_await"         => "mutex held across .await — deadlock risk",
-        "sync_in_async"             => "blocking call inside async fn — starves executor",
-        "alloc_in_hotspot"          => "heavy allocations in high-churn hot symbol",
-        "high_complexity_bottleneck"=> "complex + central + hot — hardest to change safely",
-        "spawn_in_tight_loop"       => "spawning threads/tasks inside a loop — explosion risk",
-        "unbalanced_fanout"         => "many callees, almost no callers — possibly dead code",
-        _                           => "structural anomaly",
+        "lock_across_await" => "mutex held across .await — deadlock risk",
+        "sync_in_async" => "blocking call inside async fn — starves executor",
+        "alloc_in_hotspot" => "heavy allocations in high-churn hot symbol",
+        "high_complexity_bottleneck" => "complex + central + hot — hardest to change safely",
+        "spawn_in_tight_loop" => "spawning threads/tasks inside a loop — explosion risk",
+        "unbalanced_fanout" => "many callees, almost no callers — possibly dead code",
+        _ => "structural anomaly",
     }
 }
 
@@ -329,7 +354,10 @@ fn format_report(report: &SmellReport, recommend: bool) -> String {
     }
 
     out.push('\n');
-    out.push_str(&format!("stale-core ({} files):\n", report.stale_core.len()));
+    out.push_str(&format!(
+        "stale-core ({} files):\n",
+        report.stale_core.len()
+    ));
     if report.stale_core.is_empty() {
         out.push_str("  (none)\n");
     }
@@ -364,7 +392,12 @@ fn format_report(report: &SmellReport, recommend: bool) -> String {
         for kind in &kinds {
             let entries = &by_kind[kind];
             let desc = semantic_kind_desc(kind);
-            out.push_str(&format!("  [{}] — {} ({} symbols)\n", kind, desc, entries.len()));
+            out.push_str(&format!(
+                "  [{}] — {} ({} symbols)\n",
+                kind,
+                desc,
+                entries.len()
+            ));
             for s in entries.iter().take(3) {
                 out.push_str(&format!("    • {}\n", s.symbol));
             }
@@ -376,12 +409,18 @@ fn format_report(report: &SmellReport, recommend: bool) -> String {
 
     if recommend {
         out.push('\n');
-        out.push_str(&format!("recommendations ({}):\n", report.recommendations.len()));
+        out.push_str(&format!(
+            "recommendations ({}):\n",
+            report.recommendations.len()
+        ));
         if report.recommendations.is_empty() {
             out.push_str("  (none)\n");
         }
         for r in &report.recommendations {
-            out.push_str(&format!("  $ {}\n  reason: {}\n  files:\n", r.tool, r.reason));
+            out.push_str(&format!(
+                "  $ {}\n  reason: {}\n  files:\n",
+                r.tool, r.reason
+            ));
             for f in &r.files {
                 out.push_str(&format!("    {}\n", f));
             }

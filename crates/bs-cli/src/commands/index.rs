@@ -43,7 +43,10 @@ pub fn run(ctx: &Context, args: &IndexArgs) -> Result<()> {
     let result = bs_extract::extract_repo(&store, &ctx.repo_root, args.grammar_path.as_deref())?;
 
     if !ctx.quiet {
-        eprintln!("  {} files, {} symbols", result.files_processed, result.symbols_found);
+        eprintln!(
+            "  {} files, {} symbols",
+            result.files_processed, result.symbols_found
+        );
     }
 
     if !ctx.quiet {
@@ -66,7 +69,12 @@ pub fn run(ctx: &Context, args: &IndexArgs) -> Result<()> {
         let all_stats = store.get_all_file_stats()?;
         let mut attributed = 0usize;
         for stat in &all_stats {
-            if store.symbols_for_file(&stat.path).map(|s| s.len()).unwrap_or(0) > 0 {
+            if store
+                .symbols_for_file(&stat.path)
+                .map(|s| s.len())
+                .unwrap_or(0)
+                > 0
+            {
                 let _ = miner.mine_symbol_spans(&store, &stat.path);
                 attributed += 1;
             }

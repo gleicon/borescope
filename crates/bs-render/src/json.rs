@@ -61,12 +61,19 @@ pub fn render_json(
         cochange: cochange
             .iter()
             .map(|c| CochangeEntry {
-                file: if c.file_a == target { c.file_b.clone() } else { c.file_a.clone() },
+                file: if c.file_a == target {
+                    c.file_b.clone()
+                } else {
+                    c.file_a.clone()
+                },
                 strength: c.strength.max(c.strength_rev),
                 support: c.support,
             })
             .collect(),
-        truncated: TruncatedInfo { depth: truncated_depth, nodes_omitted },
+        truncated: TruncatedInfo {
+            depth: truncated_depth,
+            nodes_omitted,
+        },
         unresolved: vec![],
     };
     serde_json::to_string_pretty(&output).unwrap_or_default()

@@ -19,7 +19,10 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
     let sym = resolve_target(&store, &args.target)?;
 
     let all_syms = store.all_symbols()?;
-    let max_churn = all_syms.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
+    let max_churn = all_syms
+        .iter()
+        .map(|s| s.churn as f32)
+        .fold(0.0f32, f32::max);
 
     let mut visited = HashSet::new();
     let root_node = build_callers_tree_node(
@@ -41,8 +44,12 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
 
     let out = match ctx.output {
         OutputFormat::Tree => {
-            let mut out =
-                tree::render_tree(&[root_node], ctx.weight, ctx.no_color, Some(ctx.depth as usize));
+            let mut out = tree::render_tree(
+                &[root_node],
+                ctx.weight,
+                ctx.no_color,
+                Some(ctx.depth as usize),
+            );
             if args.coupled && !cochange.is_empty() {
                 out.push_str("\nCo-changed files:\n");
                 for c in &cochange {
@@ -72,7 +79,11 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
             return Ok(());
         }
         OutputFormat::Tui => {
-            return bs_render::tui::run_tui(&[root_node], &format!("callers {}", args.target), ctx.weight.describe());
+            return bs_render::tui::run_tui(
+                &[root_node],
+                &format!("callers {}", args.target),
+                ctx.weight.describe(),
+            );
         }
     };
 

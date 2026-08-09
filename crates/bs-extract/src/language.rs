@@ -16,7 +16,11 @@ pub fn lang_config(lang: &LangId) -> Option<LangConfig> {
 /// and <dir>/<lang>.scm for the query pack.
 /// The .so must export `tree_sitter_<lang>` returning a Language-compatible pointer.
 pub fn load_dynamic_grammar(dir: &std::path::Path, lang_name: &str) -> Option<LangConfig> {
-    let lib_ext = if cfg!(target_os = "macos") { "dylib" } else { "so" };
+    let lib_ext = if cfg!(target_os = "macos") {
+        "dylib"
+    } else {
+        "so"
+    };
     let lib_path = dir.join(format!("{}.{}", lang_name, lib_ext));
     let query_path = dir.join(format!("{}.scm", lang_name));
 

@@ -70,7 +70,11 @@ fn node_to_html(node: &TreeNode) -> String {
         Some("~") => " class=\"modified\"",
         _ => "",
     };
-    let conf_class = if node.confidence < 0.7 { " low-conf" } else { "" };
+    let conf_class = if node.confidence < 0.7 {
+        " low-conf"
+    } else {
+        ""
+    };
     let bar_width = (node.weight * 80.0).round() as u32;
     let bar_html = if node.weight > 0.0 {
         format!(
@@ -85,7 +89,11 @@ fn node_to_html(node: &TreeNode) -> String {
         format!(
             "<li><span{}{}>{}</span>{}</li>\n",
             mark_class,
-            if conf_class.is_empty() { String::new() } else { format!(" class=\"{}\"", conf_class.trim()) },
+            if conf_class.is_empty() {
+                String::new()
+            } else {
+                format!(" class=\"{}\"", conf_class.trim())
+            },
             html_escape(&node.name),
             bar_html
         )

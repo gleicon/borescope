@@ -13,7 +13,10 @@ pub fn run(ctx: &Context, _args: &MapArgs) -> Result<()> {
     let out = if ctx.zoom == "fn" || ctx.zoom == "mod" {
         // Symbol-level: group symbols by file
         let all_syms = store.all_symbols()?;
-        let max_churn = all_syms.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
+        let max_churn = all_syms
+            .iter()
+            .map(|s| s.churn as f32)
+            .fold(0.0f32, f32::max);
         let max_loc = all_syms.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 
         // Group by file

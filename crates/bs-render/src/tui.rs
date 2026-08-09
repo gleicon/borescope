@@ -62,9 +62,18 @@ fn run_loop<B: ratatui::backend::Backend>(
             let area = f.area();
 
             let chunk_sizes = if filter_mode {
-                vec![Constraint::Min(3), Constraint::Length(3), Constraint::Length(2), Constraint::Length(1)]
+                vec![
+                    Constraint::Min(3),
+                    Constraint::Length(3),
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                ]
             } else {
-                vec![Constraint::Min(3), Constraint::Length(2), Constraint::Length(1)]
+                vec![
+                    Constraint::Min(3),
+                    Constraint::Length(2),
+                    Constraint::Length(1),
+                ]
             };
 
             let chunks = Layout::default()
@@ -90,7 +99,11 @@ fn run_loop<B: ratatui::backend::Backend>(
                     let item = &items[idx];
                     let indent = "  ".repeat(item.depth);
                     let prefix = if item.has_children {
-                        if item.expanded { "▼ " } else { "▶ " }
+                        if item.expanded {
+                            "▼ "
+                        } else {
+                            "▶ "
+                        }
                     } else {
                         "  "
                     };
@@ -163,8 +176,7 @@ fn run_loop<B: ratatui::backend::Backend>(
                 format!(" {}", weight_desc)
             };
 
-            let detail = Paragraph::new(detail_text)
-                .style(Style::default().fg(Color::Cyan));
+            let detail = Paragraph::new(detail_text).style(Style::default().fg(Color::Cyan));
             f.render_widget(detail, detail_chunk);
 
             if filter_mode {
@@ -174,9 +186,8 @@ fn run_loop<B: ratatui::backend::Backend>(
                 let help = Paragraph::new(" esc: cancel filter");
                 f.render_widget(help, help_chunk);
             } else {
-                let help = Paragraph::new(
-                    " j/k: navigate  enter/space: expand  /: filter  q: quit",
-                );
+                let help =
+                    Paragraph::new(" j/k: navigate  enter/space: expand  /: filter  q: quit");
                 f.render_widget(help, help_chunk);
             }
         })?;

@@ -15,7 +15,10 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
     let sym = resolve_target(&store, &args.target)?;
 
     let all_syms = store.all_symbols()?;
-    let max_churn = all_syms.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
+    let max_churn = all_syms
+        .iter()
+        .map(|s| s.churn as f32)
+        .fold(0.0f32, f32::max);
 
     let mut visited = HashSet::new();
     let root_node = build_tree_node(
@@ -30,9 +33,12 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
     );
 
     let out = match ctx.output {
-        OutputFormat::Tree => {
-            tree::render_tree(&[root_node], ctx.weight, ctx.no_color, Some(ctx.depth as usize))
-        }
+        OutputFormat::Tree => tree::render_tree(
+            &[root_node],
+            ctx.weight,
+            ctx.no_color,
+            Some(ctx.depth as usize),
+        ),
         OutputFormat::Folded => folded::render_folded(&[root_node]),
         OutputFormat::Json => {
             let cochange = store.get_coupled(&sym.file.to_string_lossy(), 0.3, 5)?;
@@ -54,7 +60,11 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
             return Ok(());
         }
         OutputFormat::Tui => {
-            return bs_render::tui::run_tui(&[root_node], &format!("paths {}", args.target), ctx.weight.describe());
+            return bs_render::tui::run_tui(
+                &[root_node],
+                &format!("paths {}", args.target),
+                ctx.weight.describe(),
+            );
         }
     };
 

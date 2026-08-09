@@ -1,17 +1,19 @@
 use crate::{
     language::lang_config,
-    queries::{DEF_FUNCTION, DEF_METHOD, DEF_TYPE, IMPORT, PATTERN_PREFIX, REF_CALL, REF_CALL_RECEIVER},
+    queries::{
+        DEF_FUNCTION, DEF_METHOD, DEF_TYPE, IMPORT, PATTERN_PREFIX, REF_CALL, REF_CALL_RECEIVER,
+    },
 };
 use bs_core::{EdgeKind, LangId, Result, Store, Symbol, SymbolKind};
-use serde_json;
 use ignore::WalkBuilder;
 use rayon::prelude::*;
-use streaming_iterator::StreamingIterator;
+use serde_json;
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
 };
+use streaming_iterator::StreamingIterator;
 use tree_sitter::{Parser, Query, QueryCursor};
 
 #[derive(Debug, Default)]
@@ -70,15 +72,13 @@ pub fn extract_repo(
     for outcome in parsed {
         match outcome {
             Ok(None) => result.files_skipped += 1,
-            Ok(Some(pf)) => {
-                match write_parsed(store, pf) {
-                    Ok(n) => {
-                        result.files_processed += 1;
-                        result.symbols_found += n;
-                    }
-                    Err(_) => result.files_skipped += 1,
+            Ok(Some(pf)) => match write_parsed(store, pf) {
+                Ok(n) => {
+                    result.files_processed += 1;
+                    result.symbols_found += n;
                 }
-            }
+                Err(_) => result.files_skipped += 1,
+            },
             Err(_) => result.files_skipped += 1,
         }
     }
@@ -105,15 +105,24 @@ fn parse_file(
 ) -> Result<ParsedFile> {
     let cfg = if let Some(dir) = grammar_dir {
         let lang_name = lang.to_string();
-        crate::language::load_dynamic_grammar(dir, &lang_name)
-            .or_else(|| lang_config(lang))
+        crate::language::load_dynamic_grammar(dir, &lang_name).or_else(|| lang_config(lang))
     } else {
         lang_config(lang)
     };
 
     let cfg = match cfg {
         Some(c) => c,
-        None => return Ok(ParsedFile { rel_path: rel_path.to_string(), lang: lang.clone(), loc: 0, defs: vec![], calls: vec![], imports: vec![], patterns: vec![] }),
+        None => {
+            return Ok(ParsedFile {
+                rel_path: rel_path.to_string(),
+                lang: lang.clone(),
+                loc: 0,
+                defs: vec![],
+                calls: vec![],
+                imports: vec![],
+                patterns: vec![],
+            })
+        }
     };
 
     let source = std::fs::read(abs_path)?;
@@ -126,7 +135,17 @@ fn parse_file(
 
     let tree = match parser.parse(&source, None) {
         Some(t) => t,
-        None => return Ok(ParsedFile { rel_path: rel_path.to_string(), lang: lang.clone(), loc, defs: vec![], calls: vec![], imports: vec![], patterns: vec![] }),
+        None => {
+            return Ok(ParsedFile {
+                rel_path: rel_path.to_string(),
+                lang: lang.clone(),
+                loc,
+                defs: vec![],
+                calls: vec![],
+                imports: vec![],
+                patterns: vec![],
+            })
+        }
     };
 
     let query = match Query::new(&cfg.ts_language, &cfg.query_source) {
@@ -167,9 +186,19 @@ fn parse_file(
                 let body_start = body.start_position().row as u32 + 1;
                 let body_end = body.end_position().row as u32 + 1;
                 let complexity = compute_complexity(&tree, &source, body_start, body_end);
-                defs.push(RawDef { name: text, kind, start_line: body_start, end_line: body_end, complexity });
+                defs.push(RawDef {
+                    name: text,
+                    kind,
+                    start_line: body_start,
+                    end_line: body_end,
+                    complexity,
+                });
             } else if cap_name == REF_CALL {
-                calls.push(RawCall { callee: text, receiver: None, line: start_line });
+                calls.push(RawCall {
+                    callee: text,
+                    receiver: None,
+                    line: start_line,
+                });
             } else if cap_name == REF_CALL_RECEIVER {
                 if let Some(last) = calls.last_mut() {
                     last.receiver = Some(text);
@@ -178,12 +207,23 @@ fn parse_file(
                 imports.push(text);
             } else if cap_name.starts_with(PATTERN_PREFIX) {
                 let kind = cap_name[PATTERN_PREFIX.len()..].to_string();
-                patterns.push(RawPattern { kind, line: start_line });
+                patterns.push(RawPattern {
+                    kind,
+                    line: start_line,
+                });
             }
         }
     }
 
-    Ok(ParsedFile { rel_path: rel_path.to_string(), lang: lang.clone(), loc, defs, calls, imports, patterns })
+    Ok(ParsedFile {
+        rel_path: rel_path.to_string(),
+        lang: lang.clone(),
+        loc,
+        defs,
+        calls,
+        imports,
+        patterns,
+    })
 }
 
 /// Write a parsed file into the DB — serial, no parsing.
@@ -220,7 +260,8 @@ fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
         symbols_added += 1;
 
         // Collect unique pattern kinds that fall within this def's span
-        let mut def_patterns: Vec<String> = pf.patterns
+        let mut def_patterns: Vec<String> = pf
+            .patterns
             .iter()
             .filter(|p| p.line >= def.start_line && p.line <= def.end_line)
             .map(|p| p.kind.clone())
@@ -272,9 +313,16 @@ pub fn stable_id(file: &str, name: &str, kind: &SymbolKind) -> String {
 
 fn compute_complexity(tree: &tree_sitter::Tree, source: &[u8], start: u32, end: u32) -> u32 {
     let branch_kinds = [
-        "if_statement", "if_expression", "for_statement", "while_statement",
-        "for_in_statement", "match_expression", "switch_statement",
-        "case", "catch_clause", "binary_expression",
+        "if_statement",
+        "if_expression",
+        "for_statement",
+        "while_statement",
+        "for_in_statement",
+        "match_expression",
+        "switch_statement",
+        "case",
+        "catch_clause",
+        "binary_expression",
     ];
 
     let mut count = 0u32;
@@ -302,9 +350,27 @@ fn compute_complexity(tree: &tree_sitter::Tree, source: &[u8], start: u32, end: 
             }
         }
         if cursor.goto_first_child() {
-            visit(cursor, source, start, end, branch_kinds, count, max_depth, depth + 1);
+            visit(
+                cursor,
+                source,
+                start,
+                end,
+                branch_kinds,
+                count,
+                max_depth,
+                depth + 1,
+            );
             while cursor.goto_next_sibling() {
-                visit(cursor, source, start, end, branch_kinds, count, max_depth, depth + 1);
+                visit(
+                    cursor,
+                    source,
+                    start,
+                    end,
+                    branch_kinds,
+                    count,
+                    max_depth,
+                    depth + 1,
+                );
             }
             cursor.goto_parent();
         }
@@ -381,11 +447,23 @@ fn has_loop() {
 
         assert!(lock_await.is_some(), "has_lock_and_await not found");
         let la = lock_await.unwrap();
-        assert!(la.patterns.contains(&"lock".to_string()), "missing lock, got {:?}", la.patterns);
-        assert!(la.patterns.contains(&"await".to_string()), "missing await, got {:?}", la.patterns);
+        assert!(
+            la.patterns.contains(&"lock".to_string()),
+            "missing lock, got {:?}",
+            la.patterns
+        );
+        assert!(
+            la.patterns.contains(&"await".to_string()),
+            "missing await, got {:?}",
+            la.patterns
+        );
 
         assert!(loopy.is_some(), "has_loop not found");
         let lp = loopy.unwrap();
-        assert!(lp.patterns.contains(&"loop".to_string()), "missing loop, got {:?}", lp.patterns);
+        assert!(
+            lp.patterns.contains(&"loop".to_string()),
+            "missing loop, got {:?}",
+            lp.patterns
+        );
     }
 }

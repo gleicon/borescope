@@ -14,11 +14,7 @@ pub fn render_tree(
     out
 }
 
-pub fn render_file_tree(
-    stats: &[FileStat],
-    weight: Weight,
-    no_color: bool,
-) -> String {
+pub fn render_file_tree(stats: &[FileStat], weight: Weight, no_color: bool) -> String {
     let max_churn = stats.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
     let max_loc = stats.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 
@@ -63,13 +59,25 @@ fn render_node(
 
     let mark_str = match node.mark.as_deref() {
         Some("+") => {
-            if no_color { "+ ".to_string() } else { "\x1b[32m+\x1b[0m ".to_string() }
+            if no_color {
+                "+ ".to_string()
+            } else {
+                "\x1b[32m+\x1b[0m ".to_string()
+            }
         }
         Some("-") => {
-            if no_color { "- ".to_string() } else { "\x1b[31m-\x1b[0m ".to_string() }
+            if no_color {
+                "- ".to_string()
+            } else {
+                "\x1b[31m-\x1b[0m ".to_string()
+            }
         }
         Some("~") => {
-            if no_color { "~ ".to_string() } else { "\x1b[33m~\x1b[0m ".to_string() }
+            if no_color {
+                "~ ".to_string()
+            } else {
+                "\x1b[33m~\x1b[0m ".to_string()
+            }
         }
         _ => String::new(),
     };
@@ -109,7 +117,16 @@ fn render_node(
 
     for (i, child) in node.children.iter().enumerate() {
         let last = i == node.children.len() - 1;
-        render_node(out, child, &child_prefix, last, false, no_color, collapse_depth, depth + 1);
+        render_node(
+            out,
+            child,
+            &child_prefix,
+            last,
+            false,
+            no_color,
+            collapse_depth,
+            depth + 1,
+        );
     }
 }
 
