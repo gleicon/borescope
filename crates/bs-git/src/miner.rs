@@ -340,9 +340,7 @@ fn parse_hunk_new(hunk: &str) -> Option<(u32, u32)> {
     // Format after leading "@@ " is "-old +new @@..."
     let plus = hunk.find('+')? + 1;
     let rest = &hunk[plus..];
-    let end = rest
-        .find([' ', '@'])
-        .unwrap_or(rest.len());
+    let end = rest.find([' ', '@']).unwrap_or(rest.len());
     let range = &rest[..end];
     if let Some(comma) = range.find(',') {
         let start: u32 = range[..comma].parse().ok()?;
