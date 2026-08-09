@@ -243,7 +243,7 @@ impl Miner {
             }
             if let Some(hunk) = line.strip_prefix("@@ ") {
                 if let Some((start, len)) = parse_hunk_new(hunk) {
-                    let end = start + len.saturating_sub(1).max(0);
+                    let end = start + len.saturating_sub(1);
                     commit_ranges.push((start, end));
                 }
             }
@@ -326,6 +326,7 @@ impl Miner {
 struct CommitMeta {
     sha: String,
     ts: i64,
+    #[allow(dead_code)]
     parent_count: usize,
 }
 
@@ -340,7 +341,7 @@ fn parse_hunk_new(hunk: &str) -> Option<(u32, u32)> {
     let plus = hunk.find('+')? + 1;
     let rest = &hunk[plus..];
     let end = rest
-        .find(|c: char| c == ' ' || c == '@')
+        .find([' ', '@'])
         .unwrap_or(rest.len());
     let range = &rest[..end];
     if let Some(comma) = range.find(',') {
@@ -362,10 +363,10 @@ pub fn parse_diff_ranges(
     let mut current_file = String::new();
 
     for line in diff.lines() {
-        if line.starts_with("+++ b/") {
-            current_file = line[6..].to_string();
-        } else if line.starts_with("@@ ") {
-            if let Some((start, len)) = parse_hunk_new(&line[3..]) {
+        if let Some(stripped) = line.strip_prefix("+++ b/") {
+            current_file = stripped.to_string();
+        } else if let Some(stripped) = line.strip_prefix("@@ ") {
+            if let Some((start, len)) = parse_hunk_new(stripped) {
                 let set = result.entry(current_file.clone()).or_default();
                 for l in start..(start + len.max(1)) {
                     set.insert(l);
