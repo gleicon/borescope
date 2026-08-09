@@ -18,10 +18,7 @@ pub fn run(ctx: &Context, args: &BranchArgs) -> Result<()> {
     let store = open_store(ctx)?;
     let miner = Miner::new(ctx.repo_root.clone());
 
-    let base = args.base.as_deref().unwrap_or_else(|| {
-        // Try main, then master
-        "main"
-    });
+    let base = args.base.as_deref().unwrap_or("main");
 
     let merge_base = miner.merge_base(base, &args.name)?;
     let changed_files = miner.changed_files(&merge_base, &args.name)?;

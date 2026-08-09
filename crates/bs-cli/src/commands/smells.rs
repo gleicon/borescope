@@ -2,6 +2,7 @@ use super::{emit, open_store, Context};
 use anyhow::Result;
 use bs_core::FileStat;
 use clap::Args;
+use std::cmp::Reverse;
 use std::collections::HashMap;
 
 #[derive(Args)]
@@ -92,9 +93,7 @@ fn detect_shotgun_surgery(
             });
         }
     }
-    report
-        .shotgun_surgery
-        .sort_by(|a, b| b.partners.cmp(&a.partners));
+    report.shotgun_surgery.sort_by_key(|e| Reverse(e.partners));
 }
 
 fn detect_god_file(stats: &[FileStat], report: &mut SmellReport) {
@@ -274,10 +273,10 @@ fn generate_recommendations(cochange: &[bs_core::CoChange], report: &mut SmellRe
             let other_file = if a_sec { &c.file_b } else { &c.file_a };
 
             // Rust dependency files co-changing with security code → cargo audit
-            if other_file.ends_with("Cargo.toml") || other_file.ends_with("Cargo.lock") {
-                if !cargo_files.contains(sec_file) {
-                    cargo_files.push(sec_file.clone());
-                }
+            if (other_file.ends_with("Cargo.toml") || other_file.ends_with("Cargo.lock"))
+                && !cargo_files.contains(sec_file)
+            {
+                cargo_files.push(sec_file.clone());
             }
 
             // Any security-adjacent co-change → semgrep

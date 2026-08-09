@@ -225,10 +225,8 @@ fn run_loop<B: ratatui::backend::Backend>(
                         KeyCode::Char('g') => {
                             list_state.select(Some(0));
                         }
-                        KeyCode::Char('G') => {
-                            if !items.is_empty() {
-                                list_state.select(Some(items.len() - 1));
-                            }
+                        KeyCode::Char('G') if !items.is_empty() => {
+                            list_state.select(Some(items.len() - 1));
                         }
                         KeyCode::Enter | KeyCode::Char(' ') => {
                             if let Some(idx) = list_state.selected() {

@@ -136,7 +136,6 @@ fn write_html(root: &std::path::Path, cmd: &str, content: &str) -> Result<String
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bs_git::parse_diff_ranges;
 
     const SAMPLE_DIFF: &str = r#"diff --git a/src/lib.rs b/src/lib.rs

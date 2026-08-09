@@ -127,6 +127,7 @@ pub fn resolve_target(store: &Store, target: &str) -> Result<bs_core::Symbol> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_tree_node(
     store: &Store,
     sym: &bs_core::Symbol,
@@ -172,6 +173,7 @@ pub fn build_tree_node(
     node
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_callers_tree_node(
     store: &Store,
     sym: &bs_core::Symbol,
@@ -217,6 +219,6 @@ pub fn build_callers_tree_node(
     node
 }
 
-pub fn emit(ctx: &Context, content: &str) {
+pub fn emit(_ctx: &Context, content: &str) {
     print!("{}", content);
 }

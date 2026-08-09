@@ -1,6 +1,5 @@
 mod commands;
 
-use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
