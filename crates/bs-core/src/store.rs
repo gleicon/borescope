@@ -143,6 +143,21 @@ impl Store {
             )?;
         }
 
+        // Additive migration: add file_hash column if missing
+        let has_file_hash = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('files') WHERE name='file_hash'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)
+            .unwrap_or(false);
+        if !has_file_hash {
+            self.conn
+                .execute_batch("ALTER TABLE files ADD COLUMN file_hash TEXT NOT NULL DEFAULT ''")?;
+        }
+
         Ok(())
     }
 
@@ -167,6 +182,27 @@ impl Store {
     }
 
     // ---------- files ----------
+
+    pub fn get_file_hashes(&self) -> Result<std::collections::HashMap<String, String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT path, file_hash FROM files WHERE file_hash != ''")?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        let mut map = std::collections::HashMap::new();
+        for row in rows {
+            let (path, hash) = row?;
+            map.insert(path, hash);
+        }
+        Ok(map)
+    }
+
+    pub fn update_file_hash(&self, file_id: i64, hash: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE files SET file_hash=?2 WHERE id=?1",
+            params![file_id, hash],
+        )?;
+        Ok(())
+    }
 
     pub fn upsert_file(&self, path: &str, lang: &LangId, loc: u32) -> Result<i64> {
         self.conn.execute(

@@ -5,9 +5,13 @@ use clap::Args;
 use std::collections::HashMap;
 
 #[derive(Args)]
-pub struct MapArgs {}
+pub struct MapArgs {
+    /// Limit output to top N files by weight (default: 50)
+    #[arg(long, default_value = "50")]
+    pub top: usize,
+}
 
-pub fn run(ctx: &Context, _args: &MapArgs) -> Result<()> {
+pub fn run(ctx: &Context, args: &MapArgs) -> Result<()> {
     let store = open_store(ctx)?;
 
     let out = if ctx.zoom == "fn" || ctx.zoom == "mod" {
@@ -61,9 +65,23 @@ pub fn run(ctx: &Context, _args: &MapArgs) -> Result<()> {
             })
             .collect();
 
+        // Apply --top N: sort by weight desc, truncate, append footer if omitted
+        let total = nodes.len();
+        let mut nodes = nodes;
+        nodes.sort_by(|a, b| b.weight.total_cmp(&a.weight));
+        let omitted = total.saturating_sub(args.top);
+        nodes.truncate(args.top);
+
         match ctx.output {
             OutputFormat::Tree | OutputFormat::Folded => {
-                tree::render_tree(&nodes, ctx.no_color, Some(ctx.depth as usize))
+                let mut out = tree::render_tree(&nodes, ctx.no_color, Some(ctx.depth as usize));
+                if omitted > 0 {
+                    out.push_str(&format!(
+                        "\n(+{} files not shown — use --top {} to see more)\n",
+                        omitted, total
+                    ));
+                }
+                out
             }
             OutputFormat::Json => serde_json::to_string_pretty(&nodes).unwrap_or_default(),
             OutputFormat::Html => {

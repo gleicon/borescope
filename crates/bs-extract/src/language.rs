@@ -7,8 +7,22 @@ pub struct LangConfig {
     pub query_source: String,
 }
 
-pub fn lang_config(lang: &LangId) -> Option<LangConfig> {
-    builtin_config(lang)
+/// Load config for `lang`, appending `.borescope/queries/<lang>.scm` if present.
+pub fn lang_config(
+    lang: &LangId,
+    query_override_dir: Option<&std::path::Path>,
+) -> Option<LangConfig> {
+    let mut cfg = builtin_config(lang)?;
+    if let Some(dir) = query_override_dir {
+        let override_path = dir.join(format!("{}.scm", lang));
+        if let Ok(extra) = std::fs::read_to_string(&override_path) {
+            if !extra.trim().is_empty() {
+                cfg.query_source.push('\n');
+                cfg.query_source.push_str(&extra);
+            }
+        }
+    }
+    Some(cfg)
 }
 
 /// Load a grammar from --grammar-path directory.

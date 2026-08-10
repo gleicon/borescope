@@ -31,6 +31,7 @@ struct ParsedFile {
     calls: Vec<RawCall>,
     imports: Vec<String>,
     patterns: Vec<RawPattern>,
+    file_hash: String,
 }
 
 pub fn extract_repo(
@@ -39,6 +40,15 @@ pub fn extract_repo(
     grammar_path: Option<&Path>,
 ) -> Result<ExtractionResult> {
     let grammar_dir = grammar_path;
+    let query_override_dir = repo_root.join(".borescope").join("queries");
+    let query_override = if query_override_dir.is_dir() {
+        Some(query_override_dir.as_path().to_path_buf())
+    } else {
+        None
+    };
+
+    // Load existing file hashes for incremental skip
+    let stored_hashes = store.get_file_hashes().unwrap_or_default();
 
     let files: Vec<PathBuf> = WalkBuilder::new(repo_root)
         .hidden(false)
@@ -54,7 +64,7 @@ pub fn extract_repo(
         .par_iter()
         .map(|file_path| {
             let lang = LangId::from_path(file_path);
-            if matches!(lang, LangId::Unknown | LangId::Hcl | LangId::Yaml) {
+            if !lang.is_source() {
                 return Ok(None);
             }
             let rel = file_path
@@ -62,7 +72,26 @@ pub fn extract_repo(
                 .unwrap_or(file_path)
                 .to_string_lossy()
                 .into_owned();
-            parse_file(file_path, &rel, &lang, grammar_dir).map(Some)
+
+            // Incremental skip: compare mtime+size against stored hash
+            let current_hash = file_fingerprint(file_path);
+            if let Some(stored) = stored_hashes.get(&rel) {
+                if *stored == current_hash {
+                    return Ok(None); // unchanged — skip re-parse
+                }
+            }
+
+            parse_file(
+                file_path,
+                &rel,
+                &lang,
+                grammar_dir,
+                query_override.as_deref(),
+            )
+            .map(|mut pf| {
+                pf.file_hash = current_hash;
+                Some(pf)
+            })
         })
         .collect();
 
@@ -85,13 +114,29 @@ pub fn extract_repo(
     Ok(result)
 }
 
+/// Stable file fingerprint: mtime nanoseconds + file size, no content read.
+fn file_fingerprint(path: &Path) -> String {
+    match std::fs::metadata(path) {
+        Ok(m) => {
+            let mtime = m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            format!("{}:{}", mtime, m.len())
+        }
+        Err(_) => String::new(),
+    }
+}
+
 pub fn extract_file(
     store: &Store,
     abs_path: &Path,
     rel_path: &str,
     lang: &LangId,
 ) -> Result<usize> {
-    let pf = parse_file(abs_path, rel_path, lang, None)?;
+    let pf = parse_file(abs_path, rel_path, lang, None, None)?;
     write_parsed(store, pf)
 }
 
@@ -101,12 +146,14 @@ fn parse_file(
     rel_path: &str,
     lang: &LangId,
     grammar_dir: Option<&Path>,
+    query_override_dir: Option<&Path>,
 ) -> Result<ParsedFile> {
     let cfg = if let Some(dir) = grammar_dir {
         let lang_name = lang.to_string();
-        crate::language::load_dynamic_grammar(dir, &lang_name).or_else(|| lang_config(lang))
+        crate::language::load_dynamic_grammar(dir, &lang_name)
+            .or_else(|| lang_config(lang, query_override_dir))
     } else {
-        lang_config(lang)
+        lang_config(lang, query_override_dir)
     };
 
     let cfg = match cfg {
@@ -120,6 +167,7 @@ fn parse_file(
                 calls: vec![],
                 imports: vec![],
                 patterns: vec![],
+                file_hash: String::new(),
             })
         }
     };
@@ -143,6 +191,7 @@ fn parse_file(
                 calls: vec![],
                 imports: vec![],
                 patterns: vec![],
+                file_hash: String::new(),
             })
         }
     };
@@ -222,17 +271,19 @@ fn parse_file(
         calls,
         imports,
         patterns,
+        file_hash: String::new(), // set by caller after fingerprinting
     })
 }
 
 /// Write a parsed file into the DB — serial, no parsing.
 fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
+    let file_id = store.upsert_file(&pf.rel_path, &pf.lang, pf.loc)?;
+    if !pf.file_hash.is_empty() {
+        let _ = store.update_file_hash(file_id, &pf.file_hash);
+    }
     if pf.defs.is_empty() && pf.imports.is_empty() && pf.calls.is_empty() {
-        store.upsert_file(&pf.rel_path, &pf.lang, pf.loc)?;
         return Ok(0);
     }
-
-    store.upsert_file(&pf.rel_path, &pf.lang, pf.loc)?;
 
     let mut symbols_added = 0usize;
 
