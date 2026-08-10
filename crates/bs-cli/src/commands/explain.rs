@@ -19,7 +19,7 @@ pub fn run(ctx: &Context, args: &ExplainArgs) -> Result<()> {
         .unwrap_or((0, 0));
 
     let file_str = sym.file.to_string_lossy().to_string();
-    let all_cochange = store.get_all_cochange(3).unwrap_or_default();
+    let all_cochange = store.get_all_cochange(5).unwrap_or_default();
     let cochange: Vec<_> = all_cochange
         .into_iter()
         .filter(|c| c.file_a == file_str || c.file_b == file_str)

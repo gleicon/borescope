@@ -40,7 +40,12 @@ impl Miner {
             if files.len() > 50 {
                 continue;
             }
-            for f in &files {
+            // Only count source files — exclude infra/config/lock files that inflate churn
+            let source_files: Vec<String> = files
+                .into_iter()
+                .filter(|f| LangId::from_path(Path::new(f)).is_source())
+                .collect();
+            for f in &source_files {
                 *file_churn.entry(f.clone()).or_default() += 1;
                 let e = file_last
                     .entry(f.clone())
@@ -49,8 +54,8 @@ impl Miner {
                     *e = (commit.ts, commit.sha.clone());
                 }
             }
-            if !files.is_empty() {
-                commit_files.push(files);
+            if !source_files.is_empty() {
+                commit_files.push(source_files);
             }
         }
 
@@ -68,7 +73,9 @@ impl Miner {
                 .map(|(ts, sha)| (*ts, sha.as_str()))
                 .unwrap_or((0, ""));
             let age_days = ((now_ts - last_ts).max(0) / 86400) as u32;
-            let hotspot = churn as f32 / max_churn; // simple normalization; complexity multiplier in M1+
+            // Recency-weighted hotspot: churn × exp(-λ × age_days), λ=0.003 ≈ 230-day half-life
+            let recency = (-0.003_f32 * age_days as f32).exp();
+            let hotspot = (churn as f32 / max_churn) * recency;
             let lang = LangId::from_path(Path::new(path));
             let loc = count_loc_cached(store, path);
             let file_id = store.upsert_file(path, &lang, loc)?;

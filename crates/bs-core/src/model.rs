@@ -65,6 +65,11 @@ pub enum LangId {
 }
 
 impl LangId {
+    /// True for languages with grammar support — excludes infra/config/lock files.
+    pub fn is_source(&self) -> bool {
+        !matches!(self, Self::Hcl | Self::Yaml | Self::Unknown)
+    }
+
     pub fn from_path(path: &std::path::Path) -> Self {
         match path.extension().and_then(|e| e.to_str()) {
             Some("go") => Self::Go,

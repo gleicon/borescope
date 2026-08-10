@@ -56,8 +56,14 @@ impl Weight {
             Weight::Loc => sym.loc as f32 / max_loc.max(1.0),
             Weight::Churn => sym.churn as f32 / max_churn.max(1.0),
             Weight::Hotspot => sym.hotspot,
-            _ => 0.0,
+            // Fanin requires edge counts passed in separately; caller pre-computes weight
+            Weight::Fanin | Weight::Diff => 0.0,
         }
+    }
+
+    /// Returns true if this weight mode requires a revision pair (diff/branch commands only).
+    pub fn requires_diff_context(&self) -> bool {
+        matches!(self, Weight::Diff)
     }
 }
 

@@ -101,6 +101,19 @@ fn main() {
         verbose: cli.verbose,
     };
 
+    // --weight diff is only meaningful with a revision pair; reject early with a clear message
+    if ctx.weight.requires_diff_context() {
+        match &cli.command {
+            Commands::Diff(_) | Commands::Branch(_) => {}
+            _ => {
+                eprintln!(
+                    "error: --weight diff requires a revision pair — use it with `diff` or `branch`, not this command"
+                );
+                std::process::exit(2);
+            }
+        }
+    }
+
     let result = match &cli.command {
         Commands::Index(args) => commands::index::run(&ctx, args),
         Commands::Paths(args) => commands::paths::run(&ctx, args),

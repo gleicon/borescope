@@ -49,7 +49,7 @@ pub fn run(ctx: &Context, args: &ExplainPrArgs) -> Result<()> {
 
     // Collect all symbols in changed files + their signals
     let edge_counts = store.get_call_edge_counts().unwrap_or_default();
-    let all_cochange = store.get_all_cochange(3).unwrap_or_default();
+    let all_cochange = store.get_all_cochange(5).unwrap_or_default();
 
     let changed_set: HashSet<&str> = changed_files.iter().map(|s| s.as_str()).collect();
 

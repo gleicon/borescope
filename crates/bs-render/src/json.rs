@@ -88,6 +88,7 @@ pub fn render_symbol_json(sym: &Symbol, cochange: &[CoChange]) -> String {
         symbol: &'a Symbol,
         cochange: Vec<CochangeEntry>,
     }
+    let file_str = sym.file.to_string_lossy();
     let out = SymbolJson {
         borescope: BORESCOPE_VERSION,
         schema: SCHEMA_VERSION,
@@ -95,8 +96,12 @@ pub fn render_symbol_json(sym: &Symbol, cochange: &[CoChange]) -> String {
         cochange: cochange
             .iter()
             .map(|c| CochangeEntry {
-                file: c.file_b.clone(),
-                strength: c.strength,
+                file: if c.file_a == file_str.as_ref() {
+                    c.file_b.clone()
+                } else {
+                    c.file_a.clone()
+                },
+                strength: c.strength.max(c.strength_rev),
                 support: c.support,
             })
             .collect(),
