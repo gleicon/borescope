@@ -77,6 +77,10 @@ pub struct TreeNode {
     pub weight: f32,
     pub confidence: f32,
     pub mark: Option<String>, // "+", "-", "~", or None
+    /// True when the callee could not be resolved to any symbol in the indexed repo.
+    /// These are leaf nodes — external library calls, stdlib, or unindexed code.
+    #[serde(default)]
+    pub external: bool,
     pub children: Vec<TreeNode>,
 }
 
@@ -97,6 +101,7 @@ impl TreeNode {
             weight: 0.0,
             confidence: 1.0,
             mark: None,
+            external: false,
             children: vec![],
         }
     }

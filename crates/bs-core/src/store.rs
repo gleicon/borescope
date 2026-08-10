@@ -533,12 +533,14 @@ impl Store {
         Ok(())
     }
 
-    /// Returns all symbols with their patterns column populated — used by smells detectors.
+    /// Returns symbols that have at least one captured pattern — used by smells detectors.
+    /// Pre-filtered in SQL to avoid loading the full symbol table when patterns are sparse.
     pub fn all_symbols_with_patterns(&self) -> Result<Vec<Symbol>> {
         let mut stmt = self.conn.prepare(
             "SELECT s.id,s.kind,s.name,s.qualified,f.path,s.span_start,s.span_end,
                     s.lang,s.churn,s.age_days,s.loc,s.complexity,s.hotspot,s.patterns
-             FROM symbols s JOIN files f ON f.id=s.file_id",
+             FROM symbols s JOIN files f ON f.id=s.file_id
+             WHERE s.patterns != ''",
         )?;
         let rows = stmt.query_map([], |r| {
             let mut sym = symbol_from_row(r)?;
@@ -589,6 +591,27 @@ impl Store {
             })
             .map(|v| v as u32)
             .unwrap_or(0))
+    }
+
+    /// Returns callee names for `external:` edges from this symbol — unresolvable calls.
+    pub fn get_external_callees(&self, from_id: &str) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT to_id FROM edges WHERE from_id=?1 AND to_id LIKE 'external:%'")?;
+        let rows = stmt.query_map(params![from_id], |r| {
+            let s: String = r.get(0)?;
+            Ok(s.trim_start_matches("external:").to_string())
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Total count of external (unresolvable) call edges in the graph.
+    pub fn count_external_edges(&self) -> Result<usize> {
+        Ok(self.conn.query_row(
+            "SELECT COUNT(*) FROM edges WHERE to_id LIKE 'external:%'",
+            [],
+            |r| r.get::<_, i64>(0),
+        )? as usize)
     }
 }
 

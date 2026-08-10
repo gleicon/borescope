@@ -31,6 +31,7 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
         0,
         ctx.depth,
         ctx.min_confidence,
+        1.0, // path_confidence starts at 1.0 at root (D2)
         ctx.weight,
         max_churn,
         &mut visited,
@@ -57,16 +58,20 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
             out
         }
         OutputFormat::Folded => folded::render_folded(&[root_node]),
-        OutputFormat::Json => json::render_json(
-            "callers",
-            &args.target,
-            ctx.depth,
-            &format!("{:?}", ctx.weight).to_lowercase(),
-            Some(root_node),
-            &cochange,
-            false,
-            0,
-        ),
+        OutputFormat::Json => {
+            let unresolved_edges = store.count_external_edges().unwrap_or(0);
+            json::render_json(
+                "callers",
+                &args.target,
+                ctx.depth,
+                &format!("{:?}", ctx.weight).to_lowercase(),
+                Some(root_node),
+                &cochange,
+                false,
+                0,
+                unresolved_edges,
+            )
+        }
         OutputFormat::Html => {
             let content = html::render_html(&[root_node], "callers", ctx.weight);
             let path = write_html(&ctx.repo_root, "callers", &content)?;

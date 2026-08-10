@@ -11,6 +11,9 @@ pub struct JsonOutput {
     pub borescope: &'static str,
     pub schema: u32,
     pub query: QueryMeta,
+    /// Count of external (unresolvable) call edges in the entire indexed graph.
+    /// Non-zero means the repo calls code that is not indexed — stdlib, OS, or external deps.
+    pub unresolved_edges: usize,
     pub root: Option<TreeNode>,
     pub cochange: Vec<CochangeEntry>,
     pub truncated: TruncatedInfo,
@@ -48,6 +51,7 @@ pub fn render_json(
     cochange: &[CoChange],
     truncated_depth: bool,
     nodes_omitted: usize,
+    unresolved_edges: usize,
 ) -> String {
     let output = JsonOutput {
         borescope: BORESCOPE_VERSION,
@@ -58,6 +62,7 @@ pub fn render_json(
             depth,
             weight: weight_name.to_string(),
         },
+        unresolved_edges,
         root,
         cochange: cochange
             .iter()

@@ -47,7 +47,8 @@ fn render_node(
         "├─ "
     };
 
-    let conf_annotation = if node.confidence < 0.7 {
+    let ext_annotation = if node.external { " (ext)" } else { "" };
+    let conf_annotation = if !node.external && node.confidence < 0.7 {
         format!(" ┄┄ {:.1}", node.confidence)
     } else {
         String::new()
@@ -85,8 +86,8 @@ fn render_node(
     };
 
     out.push_str(&format!(
-        "{}{}{}{}{}{}\n",
-        prefix, connector, mark_str, node.name, conf_annotation, bar
+        "{}{}{}{}{}{}{}\n",
+        prefix, connector, mark_str, node.name, ext_annotation, conf_annotation, bar
     ));
 
     if node.children.is_empty() {

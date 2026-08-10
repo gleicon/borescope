@@ -27,6 +27,7 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
         0,
         ctx.depth,
         ctx.min_confidence,
+        1.0, // path_confidence starts at 1.0 at root (D2)
         ctx.weight,
         max_churn,
         &mut visited,
@@ -39,6 +40,7 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
         OutputFormat::Folded => folded::render_folded(&[root_node]),
         OutputFormat::Json => {
             let cochange = store.get_coupled(&sym.file.to_string_lossy(), 0.3, 5)?;
+            let unresolved_edges = store.count_external_edges().unwrap_or(0);
             json::render_json(
                 "paths",
                 &args.target,
@@ -48,6 +50,7 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
                 &cochange,
                 false,
                 0,
+                unresolved_edges,
             )
         }
         OutputFormat::Html => {

@@ -55,8 +55,8 @@ pub fn run(ctx: &Context, args: &IndexArgs) -> Result<()> {
     let link_stats = bs_link::link(&store)?;
     if ctx.verbose {
         eprintln!(
-            "  resolved: {}, unresolved: {}",
-            link_stats.resolved, link_stats.left_unresolved
+            "  resolved: {}  ambiguous: {}  external: {}",
+            link_stats.resolved, link_stats.left_unresolved, link_stats.external
         );
     }
 

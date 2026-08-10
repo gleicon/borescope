@@ -127,6 +127,11 @@ pub fn resolve_target(store: &Store, target: &str) -> Result<bs_core::Symbol> {
     }
 }
 
+/// Build a callee call tree rooted at `sym`.
+///
+/// `path_confidence` is the cumulative product of edge confidences from the root to
+/// the current node. D2: a child is pruned when `path_confidence * edge_conf < min_conf`,
+/// preventing deep traversal through chains of uncertain edges.
 #[allow(clippy::too_many_arguments)]
 pub fn build_tree_node(
     store: &Store,
@@ -134,6 +139,7 @@ pub fn build_tree_node(
     depth: u32,
     max_depth: u32,
     min_conf: f32,
+    path_confidence: f32,
     weight: Weight,
     max_weight: f32,
     visited: &mut std::collections::HashSet<String>,
@@ -153,14 +159,20 @@ pub fn build_tree_node(
     }
     visited.insert(sym.id.clone());
 
-    if let Ok(callees) = store.get_callees(&sym.id, min_conf) {
+    // Fetch all call edges (no per-edge floor) and apply path-product pruning (D2)
+    if let Ok(callees) = store.get_callees(&sym.id, 0.0) {
         for (callee, conf) in callees {
+            let child_path_conf = path_confidence * conf;
+            if child_path_conf < min_conf {
+                continue; // D2: cumulative confidence too low — prune subtree
+            }
             let mut child = build_tree_node(
                 store,
                 &callee,
                 depth + 1,
                 max_depth,
                 min_conf,
+                child_path_conf,
                 weight,
                 max_weight,
                 visited,
@@ -170,9 +182,29 @@ pub fn build_tree_node(
         }
     }
 
+    // D11: include external (unresolvable) callees as annotated leaf nodes
+    if let Ok(externals) = store.get_external_callees(&sym.id) {
+        for callee_name in externals {
+            let mut ext = bs_render::TreeNode::leaf(
+                format!("external:{}", callee_name),
+                callee_name.clone(),
+                callee_name,
+                String::new(),
+                (0, 0),
+            );
+            ext.external = true;
+            ext.confidence = 0.0;
+            node.children.push(ext);
+        }
+    }
+
     node
 }
 
+/// Build a caller tree rooted at `sym` (inverted edges — who calls this?).
+///
+/// `path_confidence` is the cumulative product from root to current node (D2).
+/// Callers trees do not have external nodes — external callers are outside the index.
 #[allow(clippy::too_many_arguments)]
 pub fn build_callers_tree_node(
     store: &Store,
@@ -180,6 +212,7 @@ pub fn build_callers_tree_node(
     depth: u32,
     max_depth: u32,
     min_conf: f32,
+    path_confidence: f32,
     weight: Weight,
     max_weight: f32,
     visited: &mut std::collections::HashSet<String>,
@@ -199,14 +232,19 @@ pub fn build_callers_tree_node(
     }
     visited.insert(sym.id.clone());
 
-    if let Ok(callers) = store.get_callers(&sym.id, min_conf) {
+    if let Ok(callers) = store.get_callers(&sym.id, 0.0) {
         for (caller, conf) in callers {
+            let child_path_conf = path_confidence * conf;
+            if child_path_conf < min_conf {
+                continue; // D2: prune low-confidence caller chains
+            }
             let mut child = build_callers_tree_node(
                 store,
                 &caller,
                 depth + 1,
                 max_depth,
                 min_conf,
+                child_path_conf,
                 weight,
                 max_weight,
                 visited,

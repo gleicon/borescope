@@ -51,6 +51,7 @@ pub fn run(ctx: &Context, args: &BranchArgs) -> Result<()> {
             &[],
             false,
             0,
+            0,
         ),
         OutputFormat::Html => {
             let content = html::render_html(&nodes, &format!("branch:{}", args.name), ctx.weight);

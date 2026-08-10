@@ -47,6 +47,7 @@ pub fn run(ctx: &Context, args: &DiffArgs) -> Result<()> {
             &[],
             false,
             0,
+            0,
         ),
         OutputFormat::Folded => bs_render::folded::render_folded(&nodes),
         OutputFormat::Html => {

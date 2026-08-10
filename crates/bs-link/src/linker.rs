@@ -11,11 +11,21 @@ pub fn link(store: &Store) -> Result<LinkStats> {
 
     // name -> [symbol_ids]
     let mut by_name: HashMap<String, Vec<String>> = HashMap::new();
+    // (name, lang_str) -> [symbol_ids] — D1: same-language candidates preferred
+    let mut by_name_lang: HashMap<(String, String), Vec<String>> = HashMap::new();
+    // id -> lang_str — for caller language lookup
+    let mut symbol_lang: HashMap<String, String> = HashMap::new();
+
     for sym in &symbols {
         by_name
             .entry(sym.name.clone())
             .or_default()
             .push(sym.id.clone());
+        by_name_lang
+            .entry((sym.name.clone(), sym.lang.to_string()))
+            .or_default()
+            .push(sym.id.clone());
+        symbol_lang.insert(sym.id.clone(), sym.lang.to_string());
     }
 
     // Resolve unresolved: edges (from_id, "unresolved:<name>") -> real edges
@@ -29,31 +39,52 @@ pub fn link(store: &Store) -> Result<LinkStats> {
 
     let mut resolved = 0usize;
     let mut left_unresolved = 0usize;
+    let mut external = 0usize;
 
     for (from_id, unresolved_to) in &unresolved {
         let callee_name = unresolved_to.trim_start_matches("unresolved:");
-        let candidates = by_name.get(callee_name);
 
-        match candidates {
+        // D1: look for same-language candidates first
+        let caller_lang = symbol_lang
+            .get(from_id.as_str())
+            .cloned()
+            .unwrap_or_default();
+        let same_lang_candidates = by_name_lang.get(&(callee_name.to_string(), caller_lang));
+
+        enum Resolution {
+            Unique(Vec<String>, f32),
+            Ambiguous(Vec<String>, f32),
+            External,
+        }
+
+        let resolution = match same_lang_candidates {
+            Some(ids) if ids.len() == 1 => Resolution::Unique(ids.clone(), 0.7),
+            Some(ids) => Resolution::Ambiguous(ids.clone(), 0.3),
             None => {
-                left_unresolved += 1;
+                // No same-lang match — try any-lang (possible cross-language call or stdlib shim)
+                match by_name.get(callee_name) {
+                    Some(ids) if ids.len() == 1 => Resolution::Unique(ids.clone(), 0.5),
+                    Some(ids) => Resolution::Ambiguous(ids.clone(), 0.2),
+                    // D11: no candidates at all → external (stdlib, OS, unindexed dep)
+                    None => Resolution::External,
+                }
             }
-            Some(ids) if ids.len() == 1 => {
-                // Unique name match — medium-high confidence
-                let confidence = 0.7f32;
-                store.upsert_edge(from_id, &ids[0], &EdgeKind::Calls, confidence, None)?;
-                // Remove unresolved edge
+        };
+
+        match resolution {
+            Resolution::Unique(ids, conf) => {
+                for id in &ids {
+                    store.upsert_edge(from_id, id, &EdgeKind::Calls, conf, None)?;
+                }
                 store.conn.execute(
                     "DELETE FROM edges WHERE from_id=?1 AND to_id=?2",
                     rusqlite::params![from_id, unresolved_to],
                 )?;
                 resolved += 1;
             }
-            Some(ids) => {
-                // Multiple candidates — low confidence per edge
-                let confidence = 0.3f32;
-                for id in ids {
-                    store.upsert_edge(from_id, id, &EdgeKind::Calls, confidence, None)?;
+            Resolution::Ambiguous(ids, conf) => {
+                for id in &ids {
+                    store.upsert_edge(from_id, id, &EdgeKind::Calls, conf, None)?;
                 }
                 store.conn.execute(
                     "DELETE FROM edges WHERE from_id=?1 AND to_id=?2",
@@ -61,16 +92,28 @@ pub fn link(store: &Store) -> Result<LinkStats> {
                 )?;
                 left_unresolved += 1;
             }
+            Resolution::External => {
+                // D11: mark as external rather than leaving as unresolved
+                let external_id = format!("external:{}", callee_name);
+                store.upsert_edge(from_id, &external_id, &EdgeKind::Calls, 0.0, None)?;
+                store.conn.execute(
+                    "DELETE FROM edges WHERE from_id=?1 AND to_id=?2",
+                    rusqlite::params![from_id, unresolved_to],
+                )?;
+                external += 1;
+            }
         }
     }
 
     Ok(LinkStats {
         resolved,
         left_unresolved,
+        external,
     })
 }
 
 pub struct LinkStats {
     pub resolved: usize,
     pub left_unresolved: usize,
+    pub external: usize,
 }
