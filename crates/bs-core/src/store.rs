@@ -593,6 +593,30 @@ impl Store {
             .unwrap_or(0))
     }
 
+    /// Fetch a single symbol with its patterns column populated.
+    pub fn get_symbol_with_patterns(&self, id: &str) -> Result<Option<Symbol>> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT s.id,s.kind,s.name,s.qualified,f.path,s.span_start,s.span_end,
+                        s.lang,s.churn,s.age_days,s.loc,s.complexity,s.hotspot,s.patterns
+                 FROM symbols s JOIN files f ON f.id=s.file_id WHERE s.id=?1",
+                params![id],
+                |r| {
+                    let mut sym = symbol_from_row(r)?;
+                    let pat_str: String = r.get(13).unwrap_or_default();
+                    sym.patterns = if pat_str.is_empty() {
+                        vec![]
+                    } else {
+                        serde_json::from_str(&pat_str).unwrap_or_default()
+                    };
+                    Ok(sym)
+                },
+            )
+            .optional()?;
+        Ok(row)
+    }
+
     /// Returns callee names for `external:` edges from this symbol — unresolvable calls.
     pub fn get_external_callees(&self, from_id: &str) -> Result<Vec<String>> {
         let mut stmt = self

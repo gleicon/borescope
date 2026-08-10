@@ -284,6 +284,22 @@ impl Miner {
         Ok(parse_diff_ranges(&out))
     }
 
+    /// Returns (file, FileDiffRanges) for each file changed between rev1 and rev2.
+    /// FileDiffRanges carries both the full touched set and the pure-addition subset,
+    /// enabling `+` / `~` polarity classification (D7).
+    pub fn diff_line_ranges_full(
+        &self,
+        rev1: &str,
+        rev2: Option<&str>,
+    ) -> Result<std::collections::HashMap<String, FileDiffRanges>> {
+        let args: Vec<String> = match rev2 {
+            Some(r2) => vec!["diff".into(), "--unified=0".into(), rev1.into(), r2.into()],
+            None => vec!["diff".into(), "--unified=0".into(), rev1.into()],
+        };
+        let out = self.git(&args)?;
+        Ok(parse_diff_ranges_full(&out))
+    }
+
     pub fn merge_base(&self, rev1: &str, rev2: &str) -> Result<String> {
         let out = self.git(&["merge-base".to_string(), rev1.to_string(), rev2.to_string()])?;
         Ok(out.trim().to_string())
@@ -359,11 +375,34 @@ fn parse_hunk_new(hunk: &str) -> Option<(u32, u32)> {
     }
 }
 
-/// Parse a `git diff --unified=0` output into file -> set of touched new lines.
-pub fn parse_diff_ranges(
-    diff: &str,
-) -> std::collections::HashMap<String, std::collections::HashSet<u32>> {
-    let mut result: std::collections::HashMap<String, std::collections::HashSet<u32>> =
+/// Parse "@@ -old_start,old_len +new_start,new_len @@" and return (old_start, old_len).
+fn parse_hunk_old(hunk: &str) -> Option<(u32, u32)> {
+    let rest = hunk.strip_prefix('-')?;
+    let end = rest.find([' ', '+']).unwrap_or(rest.len());
+    let range = &rest[..end];
+    if let Some(comma) = range.find(',') {
+        let start: u32 = range[..comma].parse().ok()?;
+        let len: u32 = range[comma + 1..].parse().ok()?;
+        Some((start, len))
+    } else {
+        let start: u32 = range.parse().ok()?;
+        Some((start, 1))
+    }
+}
+
+/// Per-file line coverage from a `git diff --unified=0` output with hunk polarity.
+#[derive(Debug, Default)]
+pub struct FileDiffRanges {
+    /// New-file line numbers from pure-addition hunks (old_len == 0, new_len > 0).
+    pub pure_added: std::collections::HashSet<u32>,
+    /// All new-file line numbers from any hunk that has new content (new_len > 0).
+    pub all_touched: std::collections::HashSet<u32>,
+}
+
+/// Parse a `git diff --unified=0` output into per-file line ranges with polarity.
+/// Hunks with `new_len == 0` (pure deletions) do not contribute any new-file lines.
+pub fn parse_diff_ranges_full(diff: &str) -> std::collections::HashMap<String, FileDiffRanges> {
+    let mut result: std::collections::HashMap<String, FileDiffRanges> =
         std::collections::HashMap::new();
     let mut current_file = String::new();
 
@@ -371,16 +410,37 @@ pub fn parse_diff_ranges(
         if let Some(stripped) = line.strip_prefix("+++ b/") {
             current_file = stripped.to_string();
         } else if let Some(stripped) = line.strip_prefix("@@ ") {
-            if let Some((start, len)) = parse_hunk_new(stripped) {
-                let set = result.entry(current_file.clone()).or_default();
-                for l in start..(start + len.max(1)) {
-                    set.insert(l);
+            if let (Some((_, old_len)), Some((new_start, new_len))) =
+                (parse_hunk_old(stripped), parse_hunk_new(stripped))
+            {
+                if new_len == 0 {
+                    // Pure deletion — the symbol no longer exists in the new file;
+                    // it won't appear in the index, so no new-file line to mark.
+                    continue;
+                }
+                let entry = result.entry(current_file.clone()).or_default();
+                for l in new_start..(new_start + new_len) {
+                    entry.all_touched.insert(l);
+                    if old_len == 0 {
+                        entry.pure_added.insert(l);
+                    }
                 }
             }
         }
     }
 
     result
+}
+
+/// Parse a `git diff --unified=0` output into file -> set of touched new lines.
+/// Kept for backward compatibility; use `parse_diff_ranges_full` for polarity.
+pub fn parse_diff_ranges(
+    diff: &str,
+) -> std::collections::HashMap<String, std::collections::HashSet<u32>> {
+    parse_diff_ranges_full(diff)
+        .into_iter()
+        .map(|(k, v)| (k, v.all_touched))
+        .collect()
 }
 
 #[cfg(test)]

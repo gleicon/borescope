@@ -1,7 +1,7 @@
 use super::{emit, open_store, Context};
 use anyhow::Result;
 use bs_core::Store;
-use bs_git::Miner;
+use bs_git::{FileDiffRanges, Miner};
 use bs_render::{html, json, tree, OutputFormat, TreeNode, Weight};
 use clap::Args;
 use std::collections::{HashMap, HashSet};
@@ -26,14 +26,10 @@ pub fn run(ctx: &Context, args: &DiffArgs) -> Result<()> {
         None => miner.changed_files_worktree(rev1)?,
     };
 
-    // For --weight diff: get per-file per-line touched set
-    let line_ranges = if matches!(ctx.weight, Weight::Diff) {
-        miner.diff_line_ranges(rev1, rev2)?
-    } else {
-        HashMap::new()
-    };
+    // Always compute line ranges — needed for +/~/~ polarity (D7) and --weight diff scoring
+    let diff_ranges = miner.diff_line_ranges_full(rev1, rev2)?;
 
-    let nodes = build_diff_nodes(&store, &changed_files, &line_ranges, ctx.weight, ctx.depth)?;
+    let nodes = build_diff_nodes(&store, &changed_files, &diff_ranges, ctx.weight, ctx.depth)?;
 
     let target = format!("{}..{}", rev1, rev2.unwrap_or("worktree"));
     let out = match ctx.output {
@@ -68,35 +64,41 @@ pub fn run(ctx: &Context, args: &DiffArgs) -> Result<()> {
 fn build_diff_nodes(
     store: &Store,
     changed_files: &[String],
-    line_ranges: &HashMap<String, HashSet<u32>>,
+    diff_ranges: &HashMap<String, FileDiffRanges>,
     weight: Weight,
     _depth: u32,
 ) -> Result<Vec<TreeNode>> {
-    let changed_set: HashSet<&str> = changed_files.iter().map(|s| s.as_str()).collect();
     let mut nodes = Vec::new();
 
-    // Compute total touched lines across all files for normalization
-    let total_diff_lines: u32 = line_ranges.values().map(|s| s.len() as u32).sum();
+    // Normalize --weight diff by total new-file lines touched across all files
+    let total_diff_lines: u32 = diff_ranges
+        .values()
+        .map(|r| r.all_touched.len() as u32)
+        .sum();
 
     for file in changed_files {
         let syms = store.symbols_for_file(file)?;
         for sym in syms {
-            let file_touched = line_ranges.get(file.as_str());
-            let span_touched = sym_lines_touched(&sym.span, file_touched);
+            let file_ranges = diff_ranges.get(file.as_str());
+            let all_touched = file_ranges.map(|r| &r.all_touched);
+            let pure_added = file_ranges.map(|r| &r.pure_added);
+
+            let span_all = sym_lines_touched(&sym.span, all_touched);
+            let span_pure = sym_lines_touched(&sym.span, pure_added);
+
             let w = if matches!(weight, Weight::Diff) {
-                span_touched as f32 / total_diff_lines.max(1) as f32
+                span_all as f32 / total_diff_lines.max(1) as f32
             } else {
                 0.0
             };
 
-            let mark = if changed_set.contains(sym.file.to_str().unwrap_or("")) {
-                if span_touched > 0 {
-                    Some("~".to_string())
-                } else {
-                    None
-                }
+            // D7: classify hunk polarity per symbol span
+            let mark = if span_all == 0 {
+                None // span not touched by any hunk
+            } else if span_pure == span_all {
+                Some("+".to_string()) // every touched line is a pure addition → new code
             } else {
-                None
+                Some("~".to_string()) // at least one line modified existing code
             };
 
             let mut node = TreeNode::leaf(
