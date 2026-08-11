@@ -1,11 +1,10 @@
 # Borescope
 
-Static call-path engine. Gives you flamegraphs from structure, not execution — in every language, without running the code.
+**Call graphs from structure, not execution. In every language, without running the code.**
 
 ```
 borescope paths api/checkout.go:HandleCheckout --depth 4 --weight hotspot
 ```
-
 ```
 HandleCheckout                           ██████ 0.82
 ├─ validateCart()                        ████   0.61
@@ -15,316 +14,99 @@ HandleCheckout                           ██████ 0.82
 └─ SessionManager.open()   ┄┄ 0.5        █      0.15
 ```
 
-## What it does
+Index any repo in seconds. Ask "what calls this?", "what does this reach?", "what changed?", "what's risky?" — and get answers you can act on, not just grep output.
 
-- Parses any repo into a symbol/call graph via tree-sitter — zero config, no build step
-- Mines git history for churn, code age, hotspot score, and co-change coupling
-- Detects semantic patterns (locks, awaits, spawns, allocations) and cross-signals them with git signals to surface real risk
-- Answers call-path queries as weighted, confidence-annotated trees
-- Explains symbols and PRs in plain English
-- Exports to ANSI tree, interactive TUI, Brendan Gregg folded (pipeable to `inferno`), JSON (stable agent contract), and self-contained HTML
+---
 
 ## Install
 
 ```bash
-# From source (requires Rust 1.70+)
-cargo install --path crates/bs-cli
-
-# Or via make
-make ci-install   # uses --force, safe to re-run
-
-# Or: download a release binary from GitHub Releases
+cargo install --path crates/bs-cli   # from source, requires Rust 1.70+
+# or: download a release binary from GitHub Releases
 ```
 
-## Quick start
+## 30-second start
 
 ```bash
 cd your-repo
-borescope index --git           # build index + mine git history (~30s for 300k LOC)
-borescope hotspots              # see what's risky
-borescope map --weight hotspot -o tui   # interactive TUI explorer
-borescope smells                # antipattern + semantic report
-borescope explain dispatch_to_worker_pool   # plain-English symbol profile
-borescope explain-pr my-branch  # PR impact analysis
+
+# Two-phase index: structural queries work immediately; git signals load in background
+borescope index --no-git            # fast — paths/callers/map/explain ready now
+borescope index --git &             # background — hotspots/smells/age ready when done
+
+borescope hotspots                  # what's hot and complex?
+borescope map --weight hotspot -o tui   # navigate the whole repo interactively
+borescope smells                    # antipattern + semantic risk report
+borescope explain src/auth.rs:verify    # plain-English symbol profile
 ```
 
-## Scenarios
+---
 
-### S1 — PR review
+## Why borescope
 
+### You're about to edit a function you didn't write
 ```bash
-# Narrative impact report
-borescope explain-pr feature/my-branch
-borescope explain-pr feature/my-branch --base develop
+borescope callers src/auth/token.go:Verify --depth 4 -o tui
+```
+See everything that depends on it before you touch a line. The bar chart is churn × recency — read it as blast radius × fire risk.
 
-# Call-tree diff
+### You're reviewing a PR and don't trust the diff alone
+```bash
+borescope explain-pr feature/payments
 borescope diff main HEAD --weight hotspot
 ```
+Flags high-risk symbols, co-change partners missing from the PR, and concurrency patterns in touched code. Bottom-line risk verdict at the end.
 
-Explains which files changed, which symbols are high-risk (hot + complex + central), which co-change partners are missing from the PR, semantic patterns in touched code, and a bottom-line verdict.
-
-### S2 — Entry-point exploration
-
-```bash
-borescope paths api/checkout.go:HandleCheckout --depth 4 -o tui
-```
-
-Interactive tree of everything statically reachable from an HTTP handler. The status bar shows what the score means. Navigate with `j`/`k`, expand/collapse with Enter, filter with `/`.
-
-### S3 — Blast radius before editing
-
-```bash
-borescope callers internal/auth/token.go:Verify -o tui
-borescope callers internal/auth/token.go:Verify -o json   # for agents
-```
-
-Reverse slice. The TUI detail panel shows hotspot + file for the selected node.
-
-### S4 — Symbol profile
-
-```bash
-borescope explain dispatch_to_worker_pool
-borescope explain src/http/router.rs:handle
-```
-
-Plain-English narrative: heat rating, complexity, fanin/fanout, concurrency pattern warnings, co-change partners, risk verdict.
-
-### S5 — Repo archaeology
-
-```bash
-borescope smells
-borescope smells --recommend     # adds cargo audit / semgrep suggestions
-borescope coupled src/billing/invoice.py --min 0.5
-borescope age --zoom pkg
-```
-
-`smells` groups findings by kind with description and top examples. `--recommend` checks co-change partners for security-sensitive filenames and suggests external tools.
-
-### S6 — Branch visualization
-
-```bash
-borescope branch feature/new-pricing -o tui
-```
-
-Impact tree for an entire branch vs its merge-base.
-
-## Commands
-
-| Command | Description |
-|---|---|
-| `index [--full] [--git]` | Build/update `.borescope/` |
-| `paths <target>` | Forward slice — everything reachable from target |
-| `callers <target>` | Reverse slice — all callers of target |
-| `explain <target>` | Plain-English symbol profile with risk verdict |
-| `explain-pr <branch> [--base main]` | PR impact: risk, blast radius, co-change warnings |
-| `diff [rev1 [rev2]]` | Call-tree diff |
-| `branch <name> [--base rev]` | Branch impact tree |
-| `map` | Repo overview |
-| `hotspots [--top N]` | Churn × complexity ranking |
-| `coupled <file> [--min F]` | Co-change partners |
-| `age` | Code-age view |
-| `smells [--recommend]` | Antipattern + semantic pattern report |
-
-## Global flags
-
-```
---depth N           max tree depth (default: 3)
---zoom pkg|mod|fn   aggregation level (default: fn)
---weight none|loc|fanin|churn|hotspot|diff
--o tree|folded|json|html|tui
---min-confidence F  hide edges below threshold
---no-color          plain ASCII
-```
-
-## Output formats
-
-| Format | Description |
-|---|---|
-| `tree` (default) | ANSI call tree with weight bars and confidence annotations |
-| `tui` | Interactive terminal UI — navigate, expand/collapse, filter, score explained |
-| `folded` | Brendan Gregg format — pipe to `inferno-flamegraph` |
-| `json` | Stable schema 1 contract for agent consumption |
-| `html` | Self-contained collapsible tree, no network requests |
-
-### TUI
-
-The TUI has a persistent detail panel (cyan bar above the help line) showing:
-- What the current weight mode means (e.g., `score: hotspot  (churn × recency, 0=cold 1=hot)`)
-- The selected node's exact score and file path
-
-| Key | Action |
-|---|---|
-| `j` / `↓` | move down |
-| `k` / `↑` | move up |
-| `Enter` / `Space` | expand / collapse |
-| `g` / `G` | jump to top / bottom |
-| `/` | filter by name or file |
-| `Esc` / `q` | exit |
-
-## Semantic pattern detection
-
-During indexing, tree-sitter captures structural patterns in every symbol:
-
-| Pattern | What it means |
-|---|---|
-| `lock` | Mutex/RwLock acquisition |
-| `await` | Async yield point |
-| `block_on` | Blocking inside async context |
-| `spawn` | Thread/goroutine/task creation |
-| `loop` | Any loop construct |
-| `alloc` | Allocating calls (clone, collect, new…) |
-| `chan` | Channel send/receive |
-| `timer` | setTimeout / ticker |
-
-`smells` cross-signals these with git signals:
-
-| Detector | Signal combination |
-|---|---|
-| `lock_across_await` | lock + await in same fn — deadlock risk |
-| `sync_in_async` | block_on in async fn — starves executor |
-| `alloc_in_hotspot` | many allocs + hotspot > 0.7 |
-| `high_complexity_bottleneck` | complexity > 15 + fanin > 10 + hotspot > 0.6 |
-| `spawn_in_tight_loop` | spawn + loop — goroutine/thread explosion |
-| `unbalanced_fanout` | fanout > 8 + fanin < 2 + low churn — likely dead |
-
-## Target syntax
-
-```
-path/to/file.go:FuncName      # file + name
-path/to/file.go:42            # file + line number (resolves to enclosing symbol)
-QualifiedName                 # global name search (exit 3 if ambiguous; lists candidates)
-```
-
-## Supported languages
-
-**Tier 1** (full extraction + linking + patterns): Go, Rust, Python, TypeScript/TSX, JavaScript
-**Tier 2** (extraction + linking + patterns): Java, Ruby, C, C++
-**Tier 3** (parse + defs only): Bash
-
-Custom grammars: `--grammar-path <dir>` with `<lang>.so` and `<lang>.scm` query pack.
-
-## Exit codes
-
-```
-0  success
-1  runtime error
-2  usage error
-3  ambiguous target (candidates on stderr as JSON with kinds)
-4  index missing — run `borescope index`
-5  grammar unavailable
-```
-
-## Milestone demos (AC-14)
-
-Each demo below runs against `testdata/rust_simple` (3-function Rust fixture).
-All commands exit 0 and produce non-empty output on a fresh machine with only `git` installed.
-
-### M0 — git history mining
-
-```bash
-cd some-git-repo
-borescope index --git
-borescope hotspots --top 5
-borescope coupled src/main.rs
-borescope age --zoom pkg
-borescope smells
-```
-
-### M1 — symbol extraction
-
-```bash
-cd testdata/rust_simple
-borescope index --no-git
-borescope map --zoom fn
-```
-
-Expected: `map` shows `alpha`, `beta`, `gamma` as function nodes.
-
-### M2 — cross-file linking + confidence
-
-```bash
-borescope index --no-git
-borescope paths alpha -o json | jq '.root.children[].name'
-# → "beta"
-# → "gamma"
-borescope callers gamma -o json | jq '.root.children[].name'
-# → "alpha"
-# → "beta"
-```
-
-Edges at confidence 0.7 (same-language, unique resolution).
-
-### M3 — diff and paths
-
-```bash
-# Requires a git repo with at least two commits
-borescope diff HEAD~1 HEAD --weight hotspot
-borescope paths alpha --to gamma     # BFS path: alpha → beta → gamma
-borescope paths alpha --analyze      # LLM-legible signal array
-```
-
-### M4 — configurable thresholds, custom smells, two-phase cold start
-
-```bash
-# Phase 1: fast structural index (paths/callers/map work immediately)
-borescope index --no-git
-
-# Phase 2: add git signals in background (hotspots/smells/age require this)
-borescope index --git &
-
-# Custom thresholds
-cat > .borescope/thresholds.toml <<'EOF'
-[default]
-hotspot_high = 0.6
-complexity_high = 8
-fanin_high = 6
-EOF
-
-# Custom smell rules
-cat > .borescope/smells.toml <<'EOF'
-[[rules]]
-name = "dangerous_combo"
-description = "holds lock while spawning inside a loop"
-patterns = ["lock", "spawn", "loop"]
-severity = "critical"
-EOF
-
-borescope smells
-```
-
-## For coding agents
-
-See `skill/SKILL.md` for the agent protocol and `RECIPES.md` for cookbook workflows.
-
+### You inherited a codebase and have no map
 ```bash
 borescope index --git
-borescope explain-pr feature/branch -o json   # PR impact as JSON
+borescope smells
+borescope hotspots --top 20
+borescope map --weight hotspot -o tui
+```
+In under a minute: which files are tightly coupled, which symbols are hot and complex, which have dangerous concurrency patterns, and a navigable call graph of the whole thing.
+
+### You're using an agent to do the work
+```bash
 borescope callers src/payment.py:charge -o json --depth 3
-borescope explain src/payment.py:charge       # narrative profile
+borescope paths src/payment.py:charge --analyze
+borescope explain-pr feature/refactor -o json
 ```
+Cuts source bytes read by ~31% on rename tasks vs grep-and-read-all-files. Stable JSON contract (schema 1) — see [`docs/agent-contract.md`](docs/agent-contract.md).
 
-## Storage
+---
 
-`.borescope/index.db` — SQLite, auto-added to `.gitignore`. Delete it anytime; re-running any command rebuilds it. The `patterns` column is added automatically on first index after upgrading — no manual migration needed.
+## Languages
+
+**Tier 1** — full extraction, linking, semantic patterns: Go · Rust · Python · TypeScript/TSX · JavaScript  
+**Tier 2** — extraction, linking, patterns: Java · Ruby · C · C++  
+**Tier 3** — definitions only: Bash  
+**Custom** — `--grammar-path <dir>` with a `.so` + `.scm` query pack
+
+---
+
+## Go deeper
+
+| Topic | File |
+|---|---|
+| All commands + flags + exit codes | [`docs/commands.md`](docs/commands.md) |
+| Output formats (TUI, JSON, folded, HTML) | [`docs/output-formats.md`](docs/output-formats.md) |
+| Semantic patterns + custom smell rules | [`docs/patterns.md`](docs/patterns.md) |
+| Cookbook workflows (human + agent) | [`RECIPES.md`](RECIPES.md) |
+| JSON agent contract (schema 1) | [`docs/agent-contract.md`](docs/agent-contract.md) |
+| Agent skill protocol | [`skill/SKILL.md`](skill/SKILL.md) |
+| Performance targets + storage | [`docs/performance.md`](docs/performance.md) |
+| Full product + technical spec | [`docs/SPEC.md`](docs/SPEC.md) |
+| Skill eval methodology + results | [`docs/eval.md`](docs/eval.md) |
+
+---
 
 ## Build
 
 ```bash
-make build        # debug
-make release      # optimized
-make test
-make ci-install   # cargo install --path crates/bs-cli --force
-make tag          # git tag v<version> + push (triggers release CI)
-make dev-smells   # run smells without installing (cargo run)
+cargo build --release
+cargo test
+cargo install --path crates/bs-cli --force
 ```
 
-## Performance targets (release build, 8-core)
-
-| Operation | Target |
-|---|---|
-| Cold index, 300k LOC | < 30 s |
-| +git history, 10k commits | + < 20 s |
-| Incremental, 10 changed files | < 1 s |
-| `paths`/`callers` depth 4 | < 200 ms |
-| `diff` on 50-file PR | < 2 s |
-| Binary size (all grammars) | < 60 MB |
+`.borescope/index.db` is SQLite, auto-added to `.gitignore`. Delete and re-run `index` to rebuild from scratch at any time.
