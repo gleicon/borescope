@@ -31,6 +31,8 @@ borescope paths <target> [--to <target>] [--analyze]
 
 Everything statically reachable from `target`. With `--to`, returns the shortest BFS path between two symbols. With `--analyze`, emits a structured signal array suitable for LLM consumption.
 
+![borescope paths --to --weight hotspot](../docs/screenshots/borescope-paths-to.gif)
+
 ### callers — reverse slice
 
 ```bash

@@ -113,6 +113,8 @@ You have an HTTP handler and want to know how a downstream function will behave 
 borescope paths api/handler.go:HandleCheckout --to store/db.go:InsertOrder --weight hotspot
 ```
 
+![borescope paths --to --weight hotspot](docs/screenshots/borescope-paths-to.gif)
+
 ```
 HandleCheckout                           ██████ 0.82  ← high churn entry
 ├─ OrderService.submit()                 █████  0.71  ← also hot — co-changes often
