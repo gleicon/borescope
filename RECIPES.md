@@ -5,7 +5,10 @@ Cookbook of common workflows — human and agent.
 ## Quick reference
 
 ```bash
-borescope index --git                        # always run first; safe to re-run
+# Two-phase cold start (D8)
+borescope index --no-git    # Phase 1: fast; paths/callers/map/explain work immediately
+borescope index --git &     # Phase 2: background; needed for hotspots/smells/age/coupled
+
 borescope map --weight hotspot -o tui        # interactive explorer
 borescope smells                             # grouped antipattern + semantic report
 borescope explain <symbol>                   # plain-English profile
@@ -89,9 +92,15 @@ Output:
 ```bash
 borescope paths src/http/router.rs:dispatch_to_worker_pool --depth 5 -o tui
 borescope paths src/http/router.rs:dispatch_to_worker_pool --weight churn
+
+# BFS path to a specific target
+borescope paths src/http/router.rs:handle --to storage.go:Save
+
+# LLM-legible signal array (for agents)
+borescope paths src/http/router.rs:handle --analyze
 ```
 
-The TUI detail panel (cyan bar) shows the weight description and selected node's score + file. The confidence tag `┄0.3` means the linker guessed the edge — not a guaranteed call.
+The TUI detail panel (cyan bar) shows the weight description and selected node's score + file. The confidence tag `┄0.3` means the linker guessed the edge — not a guaranteed call. `(ext)` means unresolvable callee (stdlib, OS, unindexed dep).
 
 ---
 
@@ -149,14 +158,17 @@ Before reading source files, ask borescope for the relevant slice:
 
 ```bash
 # Agent receives: "refactor PaymentService.charge"
-borescope index --git
-borescope explain src/payment.py:charge          # understand the symbol first
+borescope index --no-git                                    # Phase 1: fast
+borescope index --git &                                     # Phase 2: background
+borescope explain src/payment.py:charge                     # understand the symbol first
+borescope paths src/payment.py:charge --analyze             # signal array for LLM
 borescope callers src/payment.py:charge -o json --depth 3
 # → agent reads JSON, identifies caller files, opens only those
-borescope explain-pr feature/refactor -o json   # verify PR impact before merge
+borescope explain-pr feature/refactor -o json               # verify PR impact before merge
 ```
 
-Typically cuts source bytes read by 70–85% vs grep-and-read-all-files.
+Measured: cuts source bytes read by ~31% vs grep-and-read-all-files on the `testdata/eval-fixture` rename task (17 KB vs 26 KB; 5 files vs 9; recall 100%).
+See `docs/eval.md` for methodology and `harness/` for reproducible measurement.
 
 ---
 
