@@ -104,7 +104,60 @@ The TUI detail panel (cyan bar) shows the weight description and selected node's
 
 ---
 
-## 6. Find what always changes together
+## 6. Predict production behavior under load
+
+You have an HTTP handler and want to know how a downstream function will behave when traffic spikes. The `--to` flag traces the exact call path; `--weight hotspot` scores each frame by churn × recency; `--analyze` emits a machine-readable signal array for the function itself.
+
+```bash
+# Step 1: find the shortest path from entry point to the function in question
+borescope paths api/handler.go:HandleCheckout --to store/db.go:InsertOrder --weight hotspot
+```
+
+```
+HandleCheckout                           ██████ 0.82  ← high churn entry
+├─ OrderService.submit()                 █████  0.71  ← also hot — co-changes often
+│  └─ db.InsertOrder()                   ███    0.47  ← moderate — stable but central
+```
+
+Each frame's hotspot score = churn × recency. High score means "changes often and recently" — the blast radius if this frame breaks under load is proportional to how many callers arrive through it.
+
+```bash
+# Step 2: structured signal array on the target
+borescope paths store/db.go:InsertOrder --analyze
+```
+
+```json
+[
+  { "kind": "fanin",      "severity": "high",     "detail": "called by 14 symbols — all load goes here" },
+  { "kind": "alloc",      "severity": "medium",   "detail": "3 allocation sites — GC pressure under volume" },
+  { "kind": "complexity", "severity": "medium",   "detail": "complexity=11, threshold=10" }
+]
+```
+
+`fanin` is the load multiplier: every caller funnels through this one function. High `alloc` inside a high-fanin function = GC pauses that appear only at scale.
+
+```bash
+# Step 3: plain-English profile — concurrency patterns + co-change partners
+borescope explain store/db.go:InsertOrder
+```
+
+Look for:
+- `⚠ lock_across_await` — mutex held across an async yield = deadlock when concurrency > 1
+- `⚠ sync_in_async` — blocking call inside async fn = executor thread starvation under load
+- co-change partners (especially `connection_pool.go`, `retry.go`) — if they move together, a load-related fix usually touches all of them
+
+```bash
+# Step 4 (optional): see every entry point that funnels into this function
+borescope callers store/db.go:InsertOrder --depth 3 --weight hotspot -o tui
+```
+
+The TUI detail panel shows each caller's hotspot score — the ones coloured red are the traffic sources most likely to spike first.
+
+**Reading the result**: a function with fanin > 10, any `alloc` pattern, and a hotspot score above 0.5 on the path to it is a load-amplification point. It will not show up in a unit test. It shows up when traffic multiplies the allocation rate by `fanin`.
+
+---
+
+## 7. Find what always changes together
 
 ```bash
 borescope coupled src/worker/pool.rs
@@ -115,7 +168,7 @@ Co-change strength ≥ 0.8 both ways = tangled pair. Candidate for interface ref
 
 ---
 
-## 7. Semantic antipattern audit
+## 8. Semantic antipattern audit
 
 ```bash
 borescope smells
@@ -135,7 +188,7 @@ Findings are grouped by kind with a description and top 3 examples:
 
 ---
 
-## 8. Identify technical debt before a sprint
+## 9. Identify technical debt before a sprint
 
 ```bash
 borescope smells
@@ -152,7 +205,7 @@ borescope age
 
 ---
 
-## 9. Agent context preparation (skill workflow)
+## 10. Agent context preparation (skill workflow)
 
 Before reading source files, ask borescope for the relevant slice:
 
@@ -172,7 +225,7 @@ See `docs/eval.md` for methodology and `harness/` for reproducible measurement.
 
 ---
 
-## 10. Post-security-patch impact check
+## 11. Post-security-patch impact check
 
 ```bash
 borescope diff <before-sha> <after-sha> --weight hotspot
@@ -184,7 +237,7 @@ borescope smells --recommend
 
 ---
 
-## 11. JSON output for scripting
+## 12. JSON output for scripting
 
 All commands support `-o json`. Schema 1 is stable (additive only):
 
@@ -198,7 +251,7 @@ borescope explain-pr feature/branch -o json | jq '.missed_cochange'
 
 ---
 
-## 12. Generate a flamegraph from the call tree
+## 13. Generate a flamegraph from the call tree
 
 ```bash
 borescope paths src/http/router.rs:dispatch_to_worker_pool -o folded | inferno-flamegraph > flame.svg
