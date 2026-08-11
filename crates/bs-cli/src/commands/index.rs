@@ -11,9 +11,13 @@ pub struct IndexArgs {
     #[arg(long)]
     pub full: bool,
 
-    /// Mine git history (default: true)
-    #[arg(long, default_value = "true")]
+    /// Mine git history (default: true); use --no-git to skip
+    #[arg(long, default_value_t = true, overrides_with = "no_git")]
     pub git: bool,
+
+    /// Skip git history mining — fast index for paths/callers/map/explain (D8 Phase 1)
+    #[arg(long, overrides_with = "git")]
+    pub no_git: bool,
 
     /// Path to additional grammar directory
     #[arg(long)]
@@ -26,7 +30,8 @@ pub fn run(ctx: &Context, args: &IndexArgs) -> Result<()> {
 
     let t0 = std::time::Instant::now();
 
-    if args.git {
+    let do_git = args.git && !args.no_git;
+    if do_git {
         if !ctx.quiet {
             eprintln!("Mining git history...");
         }
@@ -61,7 +66,7 @@ pub fn run(ctx: &Context, args: &IndexArgs) -> Result<()> {
     }
 
     // Span-level git attribution: attribute churn to individual symbol spans
-    if args.git {
+    if do_git {
         if !ctx.quiet {
             eprintln!("Attributing spans...");
         }

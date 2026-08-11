@@ -84,7 +84,10 @@ impl Store {
         std::fs::create_dir_all(&dir)?;
         let db_path = dir.join("index.db");
         let conn = Connection::open(&db_path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
+        // FK OFF: edges deliberately use virtual IDs (unresolved:*, external:*, file:*)
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=OFF;",
+        )?;
         let store = Self {
             conn,
             root: repo_root.to_path_buf(),
@@ -99,7 +102,9 @@ impl Store {
             return Err(Error::NoIndex);
         }
         let conn = Connection::open(&db_path)?;
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=OFF;",
+        )?;
         let store = Self {
             conn,
             root: repo_root.to_path_buf(),

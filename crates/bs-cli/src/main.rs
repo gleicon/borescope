@@ -1,4 +1,5 @@
 mod commands;
+mod thresholds;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;

@@ -1,4 +1,5 @@
 use super::{emit, has_pattern, open_store, Context};
+use crate::thresholds::{load_custom_smells, load_thresholds, CustomSmellRule, Thresholds};
 use anyhow::Result;
 use bs_core::FileStat;
 use clap::Args;
@@ -17,6 +18,10 @@ pub fn run(ctx: &Context, args: &SmellsArgs) -> Result<()> {
     let stats = store.get_all_file_stats()?;
     let cochange = store.get_all_cochange(5)?;
 
+    // D6: load per-repo risk thresholds; D13L2: load custom smell rules
+    let thresholds = load_thresholds(&ctx.repo_root);
+    let custom_rules = load_custom_smells(&ctx.repo_root);
+
     let mut report = SmellReport::default();
     detect_shotgun_surgery(&cochange, 0.5, 4, &mut report);
     detect_god_file(&stats, &mut report);
@@ -26,7 +31,8 @@ pub fn run(ctx: &Context, args: &SmellsArgs) -> Result<()> {
     // Semantic pattern detectors — need symbol patterns + call edge counts
     let symbols = store.all_symbols_with_patterns().unwrap_or_default();
     let edge_counts = store.get_call_edge_counts().unwrap_or_default();
-    detect_semantic(&symbols, &edge_counts, &mut report);
+    detect_semantic(&symbols, &edge_counts, &thresholds, &mut report);
+    detect_custom_rules(&symbols, &custom_rules, &mut report);
 
     if args.recommend {
         generate_recommendations(&cochange, &mut report);
@@ -141,6 +147,7 @@ fn detect_tangled_pair(
 fn detect_semantic(
     symbols: &[bs_core::Symbol],
     edge_counts: &HashMap<String, (u32, u32)>,
+    t: &Thresholds,
     report: &mut SmellReport,
 ) {
     for sym in symbols {
@@ -182,8 +189,8 @@ fn detect_semantic(
             });
         }
 
-        // heavy allocator in a hot symbol
-        if alloc_count > 2 && sym.hotspot > 0.7 {
+        // heavy allocator in a hot symbol (D6: threshold from config)
+        if alloc_count > 2 && sym.hotspot > t.hotspot_high {
             report.semantic.push(SemanticSmell {
                 kind: "alloc_in_hotspot".to_string(),
                 symbol: sym.qualified.clone(),
@@ -195,8 +202,11 @@ fn detect_semantic(
             });
         }
 
-        // high cyclomatic complexity + high fanin + high hotspot — likely a bottleneck
-        if sym.complexity > 15 && fanin > 10 && sym.hotspot > 0.6 {
+        // high cyclomatic complexity + high fanin + hotspot — likely a bottleneck (D6: thresholds)
+        if sym.complexity > t.complexity_high
+            && fanin > t.fanin_high
+            && sym.hotspot > t.hotspot_medium
+        {
             report.semantic.push(SemanticSmell {
                 kind: "high_complexity_bottleneck".to_string(),
                 symbol: sym.qualified.clone(),
@@ -229,6 +239,32 @@ fn detect_semantic(
                     fanout, fanin, sym.churn
                 ),
             });
+        }
+    }
+}
+
+/// D13L2: apply user-defined pattern combination rules from `.borescope/smells.toml`.
+fn detect_custom_rules(
+    symbols: &[bs_core::Symbol],
+    rules: &[CustomSmellRule],
+    report: &mut SmellReport,
+) {
+    if rules.is_empty() {
+        return;
+    }
+    for sym in symbols {
+        if sym.patterns.is_empty() {
+            continue;
+        }
+        for rule in rules {
+            if rule.patterns.iter().all(|p| sym.patterns.contains(p)) {
+                report.semantic.push(SemanticSmell {
+                    kind: rule.name.clone(),
+                    symbol: sym.qualified.clone(),
+                    file: sym.file.display().to_string(),
+                    detail: format!("[{}] {}", rule.severity, rule.description),
+                });
+            }
         }
     }
 }
@@ -529,7 +565,7 @@ mod tests {
     fn test_detect_semantic_lock_await() {
         let s = sym("risky_fn", &["lock", "await"], 0.3, 3);
         let mut report = SmellReport::default();
-        detect_semantic(&[s], &HashMap::new(), &mut report);
+        detect_semantic(&[s], &HashMap::new(), &Thresholds::default(), &mut report);
         assert!(
             report
                 .semantic
@@ -543,7 +579,7 @@ mod tests {
     fn test_detect_semantic_spawn_loop() {
         let s = sym("leaky_fn", &["spawn", "loop"], 0.3, 3);
         let mut report = SmellReport::default();
-        detect_semantic(&[s], &HashMap::new(), &mut report);
+        detect_semantic(&[s], &HashMap::new(), &Thresholds::default(), &mut report);
         assert!(
             report
                 .semantic
@@ -557,10 +593,46 @@ mod tests {
     fn test_detect_semantic_no_patterns_skipped() {
         let s = sym("clean_fn", &[], 0.9, 20);
         let mut report = SmellReport::default();
-        detect_semantic(&[s], &HashMap::new(), &mut report);
+        detect_semantic(&[s], &HashMap::new(), &Thresholds::default(), &mut report);
         assert!(
             report.semantic.is_empty(),
             "no patterns = no semantic smells"
+        );
+    }
+
+    #[test]
+    fn test_detect_custom_rules_fires_when_all_patterns_match() {
+        use crate::thresholds::CustomSmellRule;
+        let s = sym("danger_fn", &["lock", "await", "spawn"], 0.5, 5);
+        let rule = CustomSmellRule {
+            name: "deadlock_spawn".to_string(),
+            description: "holds lock while spawning across await".to_string(),
+            patterns: vec!["lock".to_string(), "spawn".to_string()],
+            severity: "high".to_string(),
+        };
+        let mut report = SmellReport::default();
+        detect_custom_rules(&[s], &[rule], &mut report);
+        assert!(
+            report.semantic.iter().any(|e| e.kind == "deadlock_spawn"),
+            "custom rule must fire when all patterns present"
+        );
+    }
+
+    #[test]
+    fn test_detect_custom_rules_no_fire_on_partial_match() {
+        use crate::thresholds::CustomSmellRule;
+        let s = sym("safe_fn", &["lock"], 0.5, 5);
+        let rule = CustomSmellRule {
+            name: "deadlock_spawn".to_string(),
+            description: "holds lock while spawning".to_string(),
+            patterns: vec!["lock".to_string(), "spawn".to_string()],
+            severity: "high".to_string(),
+        };
+        let mut report = SmellReport::default();
+        detect_custom_rules(&[s], &[rule], &mut report);
+        assert!(
+            report.semantic.is_empty(),
+            "custom rule must not fire when only partial patterns present"
         );
     }
 }

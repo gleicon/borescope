@@ -514,3 +514,41 @@ fn has_loop() {
         );
     }
 }
+
+#[test]
+fn test_call_extraction_simple() {
+    use tempfile::TempDir;
+    let tmp = TempDir::new().unwrap();
+    let src = tmp.path().join("lib.rs");
+    let code = r#"pub fn alpha() -> u32 {
+    beta() + gamma()
+}
+pub fn beta() -> u32 { gamma() * 2 }
+pub fn gamma() -> u32 { 42 }
+"#;
+    std::fs::write(&src, code).unwrap();
+    let store = Store::open(tmp.path()).unwrap();
+    extract_file(&store, &src, "lib.rs", &LangId::Rust).unwrap();
+    let syms = store.all_symbols().unwrap();
+    let alpha = syms
+        .iter()
+        .find(|s| s.name == "alpha")
+        .expect("alpha not found");
+    let mut stmt = store
+        .conn
+        .prepare("SELECT to_id FROM edges WHERE from_id=?1 AND kind='calls'")
+        .unwrap();
+    let callee_ids: Vec<String> = stmt
+        .query_map([&alpha.id], |r| r.get::<_, String>(0))
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .collect();
+    assert!(
+        !callee_ids.is_empty(),
+        "alpha should have unresolved call edges; got none"
+    );
+    assert!(
+        callee_ids.iter().any(|id| id == "unresolved:beta"),
+        "alpha must call beta; callee_ids={callee_ids:?}"
+    );
+}

@@ -30,6 +30,7 @@ tempfile = "3"
 
 # CLI
 clap = { version = "4", features = ["derive", "color"] }
+toml = "0.8"
 
 # TUI
 ratatui = "0.29"
