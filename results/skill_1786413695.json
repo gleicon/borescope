@@ -1,0 +1,18 @@
+{
+  "mode": "skill",
+  "bytes_read": 17610,
+  "files_opened": [
+    "borescope callers output (JSON)",
+    "src/billing.py",
+    "src/checkout.py",
+    "src/payment_service.py",
+    "src/subscription.py"
+  ],
+  "files_opened_count": 5,
+  "precision": 1.0,
+  "recall": 1.0,
+  "missed_callers": [],
+  "elapsed_s": 0.115,
+  "fixture": "/Users/gleicon/code/markdown/borescope/testdata/eval-fixture",
+  "timestamp": "2026-08-11T02:01:35Z"
+}

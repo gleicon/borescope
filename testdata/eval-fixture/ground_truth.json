@@ -1,0 +1,53 @@
+{
+  "description": "Ground truth callers of PaymentService.charge for the eval rename task",
+  "rename_task": {
+    "from": "PaymentService.charge",
+    "to": "PaymentService.process",
+    "files_to_update": [
+      "src/payment_service.py",
+      "src/checkout.py",
+      "src/subscription.py",
+      "src/billing.py"
+    ]
+  },
+  "callers": [
+    {
+      "file": "src/checkout.py",
+      "symbol": "CheckoutService.complete_order",
+      "line": 29,
+      "note": "primary checkout path"
+    },
+    {
+      "file": "src/checkout.py",
+      "symbol": "CheckoutService.quick_charge",
+      "line": 58,
+      "note": "one-off charge without full order"
+    },
+    {
+      "file": "src/subscription.py",
+      "symbol": "SubscriptionService.run_billing_cycle",
+      "line": 68,
+      "note": "recurring subscription billing"
+    },
+    {
+      "file": "src/billing.py",
+      "symbol": "BillingService.batch_charge",
+      "line": 50,
+      "note": "admin batch billing"
+    },
+    {
+      "file": "src/billing.py",
+      "symbol": "BillingService.invoice_charge",
+      "line": 70,
+      "note": "single-invoice charge"
+    },
+    {
+      "file": "src/billing.py",
+      "symbol": "BillingService.split_charge",
+      "line": 87,
+      "note": "split billing across cards"
+    }
+  ],
+  "total_call_sites": 6,
+  "files_with_callers": ["src/checkout.py", "src/subscription.py", "src/billing.py"]
+}

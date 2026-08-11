@@ -214,6 +214,84 @@ Custom grammars: `--grammar-path <dir>` with `<lang>.so` and `<lang>.scm` query 
 5  grammar unavailable
 ```
 
+## Milestone demos (AC-14)
+
+Each demo below runs against `testdata/rust_simple` (3-function Rust fixture).
+All commands exit 0 and produce non-empty output on a fresh machine with only `git` installed.
+
+### M0 — git history mining
+
+```bash
+cd some-git-repo
+borescope index --git
+borescope hotspots --top 5
+borescope coupled src/main.rs
+borescope age --zoom pkg
+borescope smells
+```
+
+### M1 — symbol extraction
+
+```bash
+cd testdata/rust_simple
+borescope index --no-git
+borescope map --zoom fn
+```
+
+Expected: `map` shows `alpha`, `beta`, `gamma` as function nodes.
+
+### M2 — cross-file linking + confidence
+
+```bash
+borescope index --no-git
+borescope paths alpha -o json | jq '.root.children[].name'
+# → "beta"
+# → "gamma"
+borescope callers gamma -o json | jq '.root.children[].name'
+# → "alpha"
+# → "beta"
+```
+
+Edges at confidence 0.7 (same-language, unique resolution).
+
+### M3 — diff and paths
+
+```bash
+# Requires a git repo with at least two commits
+borescope diff HEAD~1 HEAD --weight hotspot
+borescope paths alpha --to gamma     # BFS path: alpha → beta → gamma
+borescope paths alpha --analyze      # LLM-legible signal array
+```
+
+### M4 — configurable thresholds, custom smells, two-phase cold start
+
+```bash
+# Phase 1: fast structural index (paths/callers/map work immediately)
+borescope index --no-git
+
+# Phase 2: add git signals in background (hotspots/smells/age require this)
+borescope index --git &
+
+# Custom thresholds
+cat > .borescope/thresholds.toml <<'EOF'
+[default]
+hotspot_high = 0.6
+complexity_high = 8
+fanin_high = 6
+EOF
+
+# Custom smell rules
+cat > .borescope/smells.toml <<'EOF'
+[[rules]]
+name = "dangerous_combo"
+description = "holds lock while spawning inside a loop"
+patterns = ["lock", "spawn", "loop"]
+severity = "critical"
+EOF
+
+borescope smells
+```
+
 ## For coding agents
 
 See `skill/SKILL.md` for the agent protocol and `RECIPES.md` for cookbook workflows.
