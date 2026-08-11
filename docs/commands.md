@@ -39,6 +39,8 @@ borescope callers <target>
 
 All symbols that call `target`, recursively to `--depth`.
 
+![borescope callers -o tui](../docs/screenshots/borescope-callers.gif)
+
 ### diff — call-tree diff
 
 ```bash

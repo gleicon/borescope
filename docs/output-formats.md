@@ -35,6 +35,8 @@ borescope map --weight hotspot -o tui
 borescope paths src/http/router.rs:handle --depth 5 -o tui
 ```
 
+![borescope paths -o tui](../docs/screenshots/borescope-paths.gif)
+
 **Detail panel** (cyan bar, always visible): shows what the current weight mode means and the selected node's exact score + file path.
 
 ### Keybindings

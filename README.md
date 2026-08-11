@@ -16,6 +16,8 @@ HandleCheckout                           ██████ 0.82
 
 Index any repo in seconds. Ask "what calls this?", "what does this reach?", "what changed?", "what's risky?" — and get answers you can act on, not just grep output.
 
+![borescope map --weight hotspot -o tui](docs/screenshots/borescope-map.gif)
+
 ---
 
 ## Install
