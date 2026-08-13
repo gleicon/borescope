@@ -264,6 +264,60 @@ Folded output is Brendan Gregg format. Install `inferno`: `cargo install inferno
 
 ---
 
+## 14. Diagram output — share call graphs in PRs and docs
+
+`-o mermaid` emits a fenced Mermaid block that renders in GitHub, Claude Code, Cursor, VS Code,
+and any Markdown-aware surface. `-o dot` emits Graphviz DOT for large graphs or PNG export.
+
+```bash
+# Paste a sequence diagram into a PR comment
+borescope paths api/handler.go:HandleCheckout --to db.go:InsertOrder -o mermaid
+
+# Show co-change coupling as a dependency graph in a doc
+borescope coupled src/auth.rs -o mermaid
+
+# Antipattern overview for a code review comment
+borescope smells -o mermaid
+
+# Full call tree as flowchart
+borescope callers src/worker/pool.rs:dispatch -o mermaid
+```
+
+For large graphs, use DOT + Graphviz (install: `brew install graphviz`):
+
+```bash
+borescope map --weight hotspot -o dot --no-fence | dot -Tpng -o hotspot-map.png
+borescope paths src/auth.rs:verify  -o dot --no-fence | dot -Tsvg -o auth-paths.svg
+```
+
+`--no-fence` strips the code fence for piping. Without it, the Mermaid/DOT block renders as-is.
+
+---
+
+## 15. Install the skill on your AI coding platform
+
+The `skill` command prints the embedded skill file — redirect it to wherever your platform expects it:
+
+```bash
+# Claude Code (global, loads in every repo)
+borescope skill > ~/.claude/skills/borescope.md
+
+# Cursor (repo-local rule, always applied)
+mkdir -p .cursor/rules
+borescope skill > .cursor/rules/borescope.md
+
+# OpenHands / any agent with a system-prompt-file flag
+borescope skill > /tmp/borescope-skill.md
+```
+
+Or use the installer script:
+```bash
+./skill/ensure-borescope.sh --skill    # installs binary + Claude Code skill
+./skill/ensure-borescope.sh --cursor   # installs binary + Cursor rule
+```
+
+---
+
 ## TUI keybindings
 
 | Key | Action |

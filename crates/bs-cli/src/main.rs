@@ -81,10 +81,21 @@ enum Commands {
     Explain(commands::explain::ExplainArgs),
     /// PR impact analysis: risk, blast radius, co-change warnings
     ExplainPr(commands::explain_pr::ExplainPrArgs),
+    /// Print the embedded skill file (for Claude Code, Cursor, agent system prompts)
+    Skill(commands::skill::SkillArgs),
 }
 
 fn main() {
     let cli = Cli::parse();
+
+    // Commands that don't need a repo index — dispatch before resolve_repo
+    if let Commands::Skill(ref args) = cli.command {
+        if let Err(e) = commands::skill::run(args) {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+        return;
+    }
 
     let repo_root = match commands::resolve_repo(cli.repo.as_deref()) {
         Ok(r) => r,
@@ -133,6 +144,7 @@ fn main() {
         Commands::Smells(args) => commands::smells::run(&ctx, args),
         Commands::Explain(args) => commands::explain::run(&ctx, args),
         Commands::ExplainPr(args) => commands::explain_pr::run(&ctx, args),
+        Commands::Skill(args) => commands::skill::run(args),
     };
 
     if let Err(e) = result {

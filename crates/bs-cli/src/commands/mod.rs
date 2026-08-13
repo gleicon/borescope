@@ -9,6 +9,7 @@ pub mod hotspots;
 pub mod index;
 pub mod map;
 pub mod paths;
+pub mod skill;
 pub mod smells;
 
 use anyhow::{bail, Result};
