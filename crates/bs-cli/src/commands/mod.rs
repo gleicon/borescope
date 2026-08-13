@@ -24,6 +24,7 @@ pub struct Context {
     pub min_confidence: f32,
     pub output: OutputFormat,
     pub no_color: bool,
+    pub no_fence: bool,
     pub quiet: bool,
     pub verbose: bool,
 }

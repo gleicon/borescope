@@ -31,13 +31,17 @@ struct Cli {
     #[arg(long, global = true, default_value = "0.0")]
     min_confidence: f32,
 
-    /// Output format: tree | folded | json | html | tui
+    /// Output format: tree | folded | json | html | tui | mermaid | dot
     #[arg(short = 'o', long, global = true, default_value = "tree")]
     output: bs_render::OutputFormat,
 
     /// Plain ASCII tree (no ANSI color)
     #[arg(long, global = true)]
     no_color: bool,
+
+    /// Emit raw diagram syntax without a fenced code block (mermaid/dot only)
+    #[arg(long, global = true)]
+    no_fence: bool,
 
     /// Quiet output
     #[arg(short, long, global = true)]
@@ -98,6 +102,7 @@ fn main() {
         min_confidence: cli.min_confidence,
         output: cli.output,
         no_color: cli.no_color,
+        no_fence: cli.no_fence,
         quiet: cli.quiet,
         verbose: cli.verbose,
     };

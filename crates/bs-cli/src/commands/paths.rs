@@ -120,6 +120,10 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
                 ctx.weight.describe(),
             );
         }
+        OutputFormat::Mermaid => {
+            bs_render::mermaid::render_flowchart(&[root_node], "TD", ctx.no_fence)
+        }
+        OutputFormat::Dot => bs_render::dot::render_flowchart(&[root_node], ctx.no_fence),
     };
 
     emit(ctx, &out);
@@ -400,6 +404,20 @@ fn render_path_output(
                 signals: signals.unwrap_or_default(),
             };
             Ok(serde_json::to_string_pretty(&out).unwrap_or_default())
+        }
+        OutputFormat::Mermaid => {
+            let mut out = bs_render::mermaid::render_sequence(&root_node, ctx.no_fence);
+            if let Some(sigs) = signals {
+                out.push_str(&render_signals_text(&sigs));
+            }
+            Ok(out)
+        }
+        OutputFormat::Dot => {
+            let mut out = bs_render::dot::render_sequence(&root_node, ctx.no_fence);
+            if let Some(sigs) = signals {
+                out.push_str(&render_signals_text(&sigs));
+            }
+            Ok(out)
         }
         _ => {
             let mut out = tree::render_tree(&[root_node], ctx.no_color, Some(ctx.depth as usize));

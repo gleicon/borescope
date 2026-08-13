@@ -84,6 +84,10 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
                 ctx.weight.describe(),
             );
         }
+        OutputFormat::Mermaid => {
+            bs_render::mermaid::render_flowchart(&[root_node], "BT", ctx.no_fence)
+        }
+        OutputFormat::Dot => bs_render::dot::render_flowchart(&[root_node], ctx.no_fence),
     };
 
     emit(ctx, &out);

@@ -22,15 +22,19 @@
 - D11: External callees as first-class nodes (`external: true`)
 - D12b: Smells semantic SQL pre-filter
 
-### M3 (diff + analysis)
+### M3 (diff + analysis + diagram output)
 - D7: Diff hunk-polarity (`+`/`-`/`~`) classification
 - D15: `paths --to --analyze` + LLM-legible `signals` JSON
 - D6: `.borescope/thresholds.toml` per-language risk config
+- D16: `-o mermaid` / `-o dot` diagram renderers (sequence, flowchart, dependency, class)
 
 ### M4 (release)
 - D8: Two-phase cold-start documented in skill
 - D9: Fixture repos precision gate (≥0.9 on confidence-≥0.7 edges)
 - D13 Level 2: `.borescope/smells.toml` custom rules
+
+### M5 (state machine diagrams)
+- D16b: `bs-states` crate + `states` command + enum+match query packs (Rust + Go)
 
 ---
 
@@ -171,6 +175,16 @@
 **Answer:** Path-product threshold — prune any subtree whose cumulative path-confidence (product of all edge confidences root→node) falls below `--min-confidence`.
 
 **Rationale:** Per-edge threshold lets a chain `1.0 → 0.7 → 0.3 → 0.7 → 0.7` appear fully in the tree even though the leaf's real confidence is 0.147. Path-product makes the threshold mean what users think it means: "show me only paths I can actually trust to this depth."
+
+---
+
+## D16 — Diagram output (`-o mermaid` / `-o dot`)
+
+**Question:** Should Borescope emit visual diagram representations of its call graph data, and if so, in what format and via what CLI surface?
+
+**Answer:** Add `OutputFormat::Mermaid` and `OutputFormat::Dot` variants. Each command emits the diagram type natural to its data: `paths` (full slice) → flowchart TD, `paths --to` → sequence diagram, `callers` → flowchart BT, `map` → flowchart TD, `coupled` → dependency graph (undirected flowchart LR), `smells` → class diagram, `diff`/`branch` → flowchart TD. Output is fenced (` ```mermaid ``` `) by default; `--no-fence` emits raw syntax for piping. Mermaid renders natively in GitHub, VS Code, Claude Code, Cursor. DOT is the secondary format for large graphs — pipe to `dot -Tpng` for rendering. Neither format requires a runtime dependency. State machine diagrams (M5) require new extraction via a `bs-states` crate and `states` command with Rust + Go `.scm` query packs; fallback emits a best-effort call flowchart with a stderr warning when no explicit state machine is detected. Python/TS/C state extraction is additive after M5.
+
+**Rationale:** Developers and agents consuming Borescope output in coding platforms (Claude Code, Cursor, GitHub PR comments) get rendered diagrams immediately without copy-paste friction. Agents that need raw syntax for further processing strip the fence trivially. DOT is kept as a separate `-o dot` variant rather than a flag to `mermaid` because DOT has meaningfully different layout characteristics for large graphs — layout engine choice belongs at the output-format level, not as a sub-option.
 
 ---
 

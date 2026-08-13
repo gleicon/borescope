@@ -93,6 +93,10 @@ pub fn run(ctx: &Context, args: &MapArgs) -> Result<()> {
             OutputFormat::Tui => {
                 return bs_render::tui::run_tui(&nodes, "map", ctx.weight.describe());
             }
+            OutputFormat::Mermaid => {
+                bs_render::mermaid::render_flowchart(&nodes, "TD", ctx.no_fence)
+            }
+            OutputFormat::Dot => bs_render::dot::render_flowchart(&nodes, ctx.no_fence),
         }
     } else {
         let stats = match ctx.weight {
@@ -102,7 +106,7 @@ pub fn run(ctx: &Context, args: &MapArgs) -> Result<()> {
         match ctx.output {
             OutputFormat::Tree | OutputFormat::Folded => tree::render_file_tree(&stats, ctx.weight),
             OutputFormat::Json => serde_json::to_string_pretty(&stats).unwrap_or_default(),
-            OutputFormat::Html | OutputFormat::Tui => {
+            OutputFormat::Html | OutputFormat::Tui | OutputFormat::Mermaid | OutputFormat::Dot => {
                 let max_c = stats.iter().map(|x| x.churn as f32).fold(0.0f32, f32::max);
                 let max_l = stats.iter().map(|x| x.loc as f32).fold(0.0f32, f32::max);
                 let nodes: Vec<TreeNode> = stats
@@ -119,8 +123,19 @@ pub fn run(ctx: &Context, args: &MapArgs) -> Result<()> {
                         n
                     })
                     .collect();
-                if ctx.output == OutputFormat::Tui {
-                    return bs_render::tui::run_tui(&nodes, "map", ctx.weight.describe());
+                match ctx.output {
+                    OutputFormat::Tui => {
+                        return bs_render::tui::run_tui(&nodes, "map", ctx.weight.describe());
+                    }
+                    OutputFormat::Mermaid => {
+                        emit(ctx, &bs_render::mermaid::render_flowchart(&nodes, "TD", ctx.no_fence));
+                        return Ok(());
+                    }
+                    OutputFormat::Dot => {
+                        emit(ctx, &bs_render::dot::render_flowchart(&nodes, ctx.no_fence));
+                        return Ok(());
+                    }
+                    _ => {}
                 }
                 let content = bs_render::html::render_html(&nodes, "map", ctx.weight);
                 let path = write_html(&ctx.repo_root, "map", &content)?;

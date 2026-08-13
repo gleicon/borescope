@@ -40,6 +40,14 @@ pub fn run(ctx: &Context, args: &SmellsArgs) -> Result<()> {
 
     let out = match ctx.output {
         bs_render::OutputFormat::Json => serde_json::to_string_pretty(&report).unwrap_or_default(),
+        bs_render::OutputFormat::Mermaid => {
+            let findings = smells_to_findings(&report);
+            bs_render::mermaid::render_class(&findings, ctx.no_fence)
+        }
+        bs_render::OutputFormat::Dot => {
+            let findings = smells_to_findings(&report);
+            bs_render::dot::render_class(&findings, ctx.no_fence)
+        }
         _ => format_report(&report, args.recommend),
     };
 
@@ -361,6 +369,28 @@ fn semantic_kind_desc(kind: &str) -> &'static str {
         "unbalanced_fanout" => "many callees, almost no callers — possibly dead code",
         _ => "structural anomaly",
     }
+}
+
+/// Flatten all smell findings into (file, kind) pairs for diagram renderers.
+fn smells_to_findings(report: &SmellReport) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for s in &report.semantic {
+        out.push((s.file.clone(), s.kind.clone()));
+    }
+    for f in &report.god_file {
+        out.push((f.clone(), "god_file".to_string()));
+    }
+    for f in &report.stale_core {
+        out.push((f.clone(), "stale_core".to_string()));
+    }
+    for e in &report.shotgun_surgery {
+        out.push((e.file.clone(), "shotgun_surgery".to_string()));
+    }
+    for (a, b) in &report.tangled_pair {
+        out.push((a.clone(), "tangled_pair".to_string()));
+        out.push((b.clone(), "tangled_pair".to_string()));
+    }
+    out
 }
 
 fn format_report(report: &SmellReport, recommend: bool) -> String {

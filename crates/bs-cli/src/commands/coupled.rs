@@ -22,6 +22,12 @@ pub fn run(ctx: &Context, args: &CoupledArgs) -> Result<()> {
 
     let out = match ctx.output {
         bs_render::OutputFormat::Json => serde_json::to_string_pretty(&results).unwrap_or_default(),
+        bs_render::OutputFormat::Mermaid => {
+            bs_render::mermaid::render_dependency(&results, &args.target, ctx.no_fence)
+        }
+        bs_render::OutputFormat::Dot => {
+            bs_render::dot::render_dependency(&results, &args.target, ctx.no_fence)
+        }
         _ => {
             let mut out = String::new();
             out.push_str(&format!(

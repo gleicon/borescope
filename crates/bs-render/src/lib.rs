@@ -1,6 +1,8 @@
+pub mod dot;
 pub mod folded;
 pub mod html;
 pub mod json;
+pub mod mermaid;
 pub mod tree;
 pub mod tui;
 
@@ -15,6 +17,10 @@ pub enum OutputFormat {
     Json,
     Html,
     Tui,
+    /// Mermaid diagram (fenced ```mermaid``` block by default; use --no-fence for raw syntax).
+    Mermaid,
+    /// Graphviz DOT diagram (fenced ```dot``` block by default; use --no-fence for raw syntax).
+    Dot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
