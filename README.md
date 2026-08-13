@@ -27,6 +27,30 @@ cargo install --path crates/bs-cli   # from source, requires Rust 1.70+
 # or: download a release binary from GitHub Releases
 ```
 
+### AI coding platform integration
+
+After installing the binary, one command installs the skill into your AI coding platform:
+
+```bash
+# Claude Code — installs globally, active in every repo
+borescope skill > ~/.claude/skills/borescope.md
+
+# Cursor — installs as a repo-local rule
+mkdir -p .cursor/rules
+borescope skill > .cursor/rules/borescope.md
+
+# OpenHands / any agent with system-prompt support
+borescope skill > /tmp/borescope-skill.md
+```
+
+Or run the installer script (installs binary + skill in one step):
+```bash
+./skill/ensure-borescope.sh --skill    # binary + Claude Code skill
+./skill/ensure-borescope.sh --cursor   # binary + Cursor rule
+```
+
+`borescope skill` prints the embedded skill file to stdout — no network, no repo required.
+
 ## 30-second start
 
 ```bash
@@ -92,11 +116,11 @@ Cuts source bytes read by ~31% on rename tasks vs grep-and-read-all-files. Stabl
 | Topic | File |
 |---|---|
 | All commands + flags + exit codes | [`docs/commands.md`](docs/commands.md) |
-| Output formats (TUI, JSON, folded, HTML) | [`docs/output-formats.md`](docs/output-formats.md) |
+| Output formats (TUI, JSON, folded, HTML, Mermaid, DOT) | [`docs/output-formats.md`](docs/output-formats.md) |
 | Semantic patterns + custom smell rules | [`docs/patterns.md`](docs/patterns.md) |
 | Cookbook workflows (human + agent) | [`RECIPES.md`](RECIPES.md) |
 | JSON agent contract (schema 1) | [`docs/agent-contract.md`](docs/agent-contract.md) |
-| Agent skill protocol | [`skill/SKILL.md`](skill/SKILL.md) |
+| Agent skill + platform install | [`skill/SKILL.md`](skill/SKILL.md) · `borescope skill` |
 | Performance targets + storage | [`docs/performance.md`](docs/performance.md) |
 | Full product + technical spec | [`docs/SPEC.md`](docs/SPEC.md) |
 | Skill eval methodology + results | [`docs/eval.md`](docs/eval.md) |

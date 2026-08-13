@@ -145,6 +145,37 @@ Global name search exits with code **3** and lists candidates on stderr as a JSO
 
 ---
 
+## skill — print embedded skill file
+
+```bash
+borescope skill
+```
+
+Prints the embedded skill file (SKILL.md) to stdout. Redirect to install on any AI coding platform.
+Works outside a git repository — no index required.
+
+```bash
+# Claude Code (global — active in every repo)
+borescope skill > ~/.claude/skills/borescope.md
+
+# Cursor (repo-local rule with frontmatter)
+mkdir -p .cursor/rules
+borescope skill > .cursor/rules/borescope.md
+
+# OpenHands / any agent with system-prompt-file support
+borescope skill > /tmp/borescope-skill.md
+
+# Or use the all-in-one installer
+./skill/ensure-borescope.sh --skill    # installs binary + Claude Code skill
+./skill/ensure-borescope.sh --cursor   # installs binary + Cursor rule (writes frontmatter)
+```
+
+| Flag | Description |
+|---|---|
+| `--raw` | (no-op — output is always raw Markdown; kept for scripting clarity) |
+
+---
+
 ## Exit codes
 
 ```
