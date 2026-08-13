@@ -25,12 +25,10 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
     let sym = resolve_target(&store, &args.target)?;
 
     let all_syms = store.all_symbols()?;
-    let max_churn = all_syms
-        .iter()
-        .map(|s| s.churn as f32)
-        .fold(0.0f32, f32::max);
+    let max_churn = all_syms.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
+    let max_loc = all_syms.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 
-    // D15: --to mode — BFS to find shortest path to a target symbol
+    // --to mode — BFS to find shortest path to a target symbol
     if let Some(ref to_target) = args.to {
         let end_sym = resolve_target(&store, to_target)?;
         let path = find_path_to(&store, &sym, &end_sym, ctx.depth, ctx.min_confidence);
@@ -38,7 +36,7 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
         let (root_node, path_syms) = if let Some(path) = path {
             // Build a linear tree from the path: each hop is a child of the previous
             let path_syms = enrich_with_patterns(&store, &path);
-            let root = build_path_tree(&path_syms, max_churn, ctx.weight);
+            let root = build_path_tree(&path_syms, max_churn, max_loc, ctx.weight);
             (root, path_syms)
         } else {
             anyhow::bail!(
@@ -71,6 +69,7 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
         1.0,
         ctx.weight,
         max_churn,
+        max_loc,
         &mut visited,
     );
 
@@ -184,7 +183,7 @@ fn enrich_with_patterns(store: &Store, syms: &[Symbol]) -> Vec<Symbol> {
 }
 
 /// Build a linear TreeNode chain from a path (root → child → grandchild → ...).
-fn build_path_tree(path: &[Symbol], max_weight: f32, weight: bs_render::Weight) -> TreeNode {
+fn build_path_tree(path: &[Symbol], max_churn: f32, max_loc: f32, weight: bs_render::Weight) -> TreeNode {
     let make_node = |sym: &Symbol| -> TreeNode {
         let mut n = TreeNode::leaf(
             sym.id.clone(),
@@ -193,7 +192,7 @@ fn build_path_tree(path: &[Symbol], max_weight: f32, weight: bs_render::Weight) 
             sym.file.to_string_lossy().into_owned(),
             sym.span,
         );
-        n.weight = weight.score_symbol(sym, max_weight, max_weight);
+        n.weight = weight.score_symbol(sym, max_churn, max_loc);
         n
     };
 
@@ -220,7 +219,12 @@ fn collect_tree_ids(node: &TreeNode) -> Vec<String> {
     ids
 }
 
-/// D15: a single composable signal emitted for LLM consumption.
+/// A single composable signal emitted for LLM consumption via `--analyze -o json`.
+///
+/// `kind`: `"path_depth"` | `"lock_await"` | `"blocking_async"` | `"high_complexity"` |
+///         `"hot_symbol"` | `"cross_file_boundary"`
+/// `severity`: `"info"` | `"medium"` | `"high"`
+/// `detail`: human-readable explanation suitable for direct LLM prompt injection.
 #[derive(Serialize)]
 pub struct Signal {
     pub kind: String,
@@ -477,6 +481,202 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
         lines.push(current.trim().to_string());
     }
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bs_core::{model::SymbolKind, EdgeKind, LangId, Store};
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    fn tmp_store() -> (TempDir, Store) {
+        let dir = TempDir::new().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        (dir, store)
+    }
+
+    fn make_sym(id: &str, name: &str, file: &str) -> Symbol {
+        Symbol {
+            id: id.to_string(),
+            kind: SymbolKind::Function,
+            name: name.to_string(),
+            qualified: format!("{}:{}", file, name),
+            file: PathBuf::from(file),
+            span: (1, 10),
+            lang: LangId::Rust,
+            churn: 0,
+            age_days: 0,
+            loc: 10,
+            complexity: 1,
+            hotspot: 0.0,
+            patterns: vec![],
+        }
+    }
+
+    fn insert_sym(store: &Store, sym: &Symbol) {
+        store
+            .upsert_file(sym.file.to_str().unwrap(), &sym.lang, sym.loc)
+            .unwrap();
+        store.upsert_symbol(sym).unwrap();
+    }
+
+    fn insert_edge(store: &Store, from: &str, to: &str, conf: f32) {
+        store.upsert_edge(from, to, &EdgeKind::Calls, conf, None).unwrap();
+    }
+
+    // --- find_path_to tests ---
+
+    #[test]
+    fn path_to_self_returns_single_node() {
+        let (_dir, store) = tmp_store();
+        let a = make_sym("a", "alpha", "src/a.rs");
+        insert_sym(&store, &a);
+        let result = find_path_to(&store, &a, &a, 4, 0.0);
+        assert_eq!(result.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn path_to_direct_callee() {
+        let (_dir, store) = tmp_store();
+        let a = make_sym("a", "alpha", "src/a.rs");
+        let b = make_sym("b", "beta", "src/b.rs");
+        insert_sym(&store, &a);
+        insert_sym(&store, &b);
+        insert_edge(&store, "a", "b", 1.0);
+
+        let path = find_path_to(&store, &a, &b, 3, 0.0).unwrap();
+        assert_eq!(path.len(), 2);
+        assert_eq!(path[0].id, "a");
+        assert_eq!(path[1].id, "b");
+    }
+
+    #[test]
+    fn path_to_two_hops() {
+        let (_dir, store) = tmp_store();
+        let a = make_sym("a", "alpha", "src/a.rs");
+        let b = make_sym("b", "beta", "src/b.rs");
+        let c = make_sym("c", "gamma", "src/c.rs");
+        insert_sym(&store, &a);
+        insert_sym(&store, &b);
+        insert_sym(&store, &c);
+        insert_edge(&store, "a", "b", 1.0);
+        insert_edge(&store, "b", "c", 1.0);
+
+        let path = find_path_to(&store, &a, &c, 4, 0.0).unwrap();
+        assert_eq!(path.len(), 3);
+        assert_eq!(path[2].id, "c");
+    }
+
+    #[test]
+    fn path_to_none_when_unreachable() {
+        let (_dir, store) = tmp_store();
+        let a = make_sym("a", "alpha", "src/a.rs");
+        let b = make_sym("b", "beta", "src/b.rs");
+        insert_sym(&store, &a);
+        insert_sym(&store, &b);
+        // no edge
+        assert!(find_path_to(&store, &a, &b, 4, 0.0).is_none());
+    }
+
+    #[test]
+    fn path_to_none_when_depth_exceeded() {
+        let (_dir, store) = tmp_store();
+        let a = make_sym("a", "alpha", "src/a.rs");
+        let b = make_sym("b", "beta", "src/b.rs");
+        let c = make_sym("c", "gamma", "src/c.rs");
+        insert_sym(&store, &a);
+        insert_sym(&store, &b);
+        insert_sym(&store, &c);
+        insert_edge(&store, "a", "b", 1.0);
+        insert_edge(&store, "b", "c", 1.0);
+        // max_depth=1 — path has 2 hops, unreachable
+        assert!(find_path_to(&store, &a, &c, 1, 0.0).is_none());
+    }
+
+    #[test]
+    fn path_to_pruned_by_confidence() {
+        let (_dir, store) = tmp_store();
+        let a = make_sym("a", "alpha", "src/a.rs");
+        let b = make_sym("b", "beta", "src/b.rs");
+        insert_sym(&store, &a);
+        insert_sym(&store, &b);
+        insert_edge(&store, "a", "b", 0.2); // low confidence edge
+        // min_conf=0.5 prunes this edge
+        assert!(find_path_to(&store, &a, &b, 4, 0.5).is_none());
+    }
+
+    // --- analyze_symbols tests ---
+
+    #[test]
+    fn analyze_empty_returns_no_signals() {
+        let (_dir, store) = tmp_store();
+        assert!(analyze_symbols(&[], &store).is_empty());
+    }
+
+    #[test]
+    fn analyze_emits_path_depth_signal() {
+        let (_dir, store) = tmp_store();
+        let a = make_sym("a", "alpha", "src/a.rs");
+        let sigs = analyze_symbols(&[a], &store);
+        assert!(sigs.iter().any(|s| s.kind == "path_depth"));
+    }
+
+    #[test]
+    fn analyze_emits_lock_await_signal() {
+        let (_dir, store) = tmp_store();
+        let mut sym = make_sym("a", "risky", "src/a.rs");
+        sym.patterns = vec!["lock".to_string(), "await".to_string()];
+        let sigs = analyze_symbols(&[sym], &store);
+        let found = sigs.iter().find(|s| s.kind == "lock_await");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().severity, "high");
+    }
+
+    #[test]
+    fn analyze_emits_blocking_async_signal() {
+        let (_dir, store) = tmp_store();
+        let mut sym = make_sym("a", "blocker", "src/a.rs");
+        sym.patterns = vec!["block_on".to_string()];
+        let sigs = analyze_symbols(&[sym], &store);
+        assert!(sigs.iter().any(|s| s.kind == "blocking_async" && s.severity == "high"));
+    }
+
+    #[test]
+    fn analyze_emits_high_complexity_signal() {
+        let (_dir, store) = tmp_store();
+        let mut sym = make_sym("a", "complex", "src/a.rs");
+        sym.complexity = 15;
+        let sigs = analyze_symbols(&[sym], &store);
+        assert!(sigs.iter().any(|s| s.kind == "high_complexity"));
+    }
+
+    #[test]
+    fn analyze_emits_hot_symbol_signal() {
+        let (_dir, store) = tmp_store();
+        let mut sym = make_sym("a", "hot", "src/a.rs");
+        sym.hotspot = 0.9;
+        let sigs = analyze_symbols(&[sym], &store);
+        assert!(sigs.iter().any(|s| s.kind == "hot_symbol" && s.severity == "medium"));
+    }
+
+    #[test]
+    fn analyze_emits_cross_file_boundary() {
+        let (_dir, store) = tmp_store();
+        let a = make_sym("a", "alpha", "src/a.rs");
+        let b = make_sym("b", "beta", "src/b.rs");
+        let sigs = analyze_symbols(&[a, b], &store);
+        assert!(sigs.iter().any(|s| s.kind == "cross_file_boundary"));
+    }
+
+    #[test]
+    fn analyze_no_cross_file_signal_same_file() {
+        let (_dir, store) = tmp_store();
+        let a = make_sym("a", "alpha", "src/a.rs");
+        let b = make_sym("b", "beta", "src/a.rs");
+        let sigs = analyze_symbols(&[a, b], &store);
+        assert!(!sigs.iter().any(|s| s.kind == "cross_file_boundary"));
+    }
 }
 
 fn write_html(root: &std::path::Path, cmd: &str, content: &str) -> Result<String> {

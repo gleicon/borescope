@@ -23,7 +23,7 @@ pub fn run(ctx: &Context, args: &BranchArgs) -> Result<()> {
     let merge_base = miner.merge_base(base, &args.name)?;
     let changed_files = miner.changed_files(&merge_base, &args.name)?;
 
-    // D7: compute line ranges to classify hunk polarity (+/~) per symbol span
+    // Compute line ranges to classify hunk polarity (+/~) per symbol span
     let diff_ranges = miner
         .diff_line_ranges_full(&merge_base, Some(&args.name))
         .unwrap_or_default();

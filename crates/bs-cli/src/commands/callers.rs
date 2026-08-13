@@ -19,10 +19,8 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
     let sym = resolve_target(&store, &args.target)?;
 
     let all_syms = store.all_symbols()?;
-    let max_churn = all_syms
-        .iter()
-        .map(|s| s.churn as f32)
-        .fold(0.0f32, f32::max);
+    let max_churn = all_syms.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
+    let max_loc = all_syms.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 
     let mut visited = HashSet::new();
     let root_node = build_callers_tree_node(
@@ -31,9 +29,10 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
         0,
         ctx.depth,
         ctx.min_confidence,
-        1.0, // path_confidence starts at 1.0 at root (D2)
+        1.0,
         ctx.weight,
         max_churn,
+        max_loc,
         &mut visited,
     );
 

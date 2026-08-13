@@ -26,7 +26,7 @@ pub fn run(ctx: &Context, args: &DiffArgs) -> Result<()> {
         None => miner.changed_files_worktree(rev1)?,
     };
 
-    // Always compute line ranges — needed for +/~/~ polarity (D7) and --weight diff scoring
+    // Always compute line ranges — needed for +/~ polarity and --weight diff scoring
     let diff_ranges = miner.diff_line_ranges_full(rev1, rev2)?;
 
     let nodes = build_diff_nodes(&store, &changed_files, &diff_ranges, ctx.weight, ctx.depth)?;
@@ -92,7 +92,7 @@ fn build_diff_nodes(
                 0.0
             };
 
-            // D7: classify hunk polarity per symbol span
+            // Classify hunk polarity per symbol span
             let mark = if span_all == 0 {
                 None // span not touched by any hunk
             } else if span_pure == span_all {

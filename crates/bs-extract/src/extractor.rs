@@ -279,7 +279,7 @@ fn parse_file(
 fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
     let file_id = store.upsert_file(&pf.rel_path, &pf.lang, pf.loc)?;
     if !pf.file_hash.is_empty() {
-        let _ = store.update_file_hash(file_id, &pf.file_hash);
+        store.update_file_hash(file_id, &pf.file_hash).ok();
     }
     if pf.defs.is_empty() && pf.imports.is_empty() && pf.calls.is_empty() {
         return Ok(0);
@@ -320,25 +320,25 @@ fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
 
         if !def_patterns.is_empty() {
             if let Ok(json) = serde_json::to_string(&def_patterns) {
-                let _ = store.update_symbol_patterns(&id, &json);
+                store.update_symbol_patterns(&id, &json).ok();
             }
         }
 
         let file_sym_id = format!("file:{}", pf.rel_path);
-        let _ = store.upsert_edge(&file_sym_id, &id, &EdgeKind::Contains, 1.0, None);
+        store.upsert_edge(&file_sym_id, &id, &EdgeKind::Contains, 1.0, None).ok();
     }
 
     for import in &pf.imports {
         let from_id = stable_id(&pf.rel_path, &pf.rel_path, &SymbolKind::File);
         let to_id = format!("import:{}", import);
-        let _ = store.upsert_edge(&from_id, &to_id, &EdgeKind::Imports, 1.0, None);
+        store.upsert_edge(&from_id, &to_id, &EdgeKind::Imports, 1.0, None).ok();
     }
 
     for call in &pf.calls {
         let callee_id = format!("unresolved:{}", call.callee);
         if let Some(enc) = enclosing_def(&pf.defs, call.line) {
             let enc_id = stable_id(&pf.rel_path, &enc.name, &enc.kind);
-            let _ = store.upsert_edge(&enc_id, &callee_id, &EdgeKind::Calls, 0.3, None);
+            store.upsert_edge(&enc_id, &callee_id, &EdgeKind::Calls, 0.3, None).ok();
         }
     }
 

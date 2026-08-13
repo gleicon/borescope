@@ -72,7 +72,7 @@ fn collect_edges(node: &JsonNode, parent: Option<&str>, edges: &mut HashSet<(Str
             collect_edges(child, Some(&node.name), edges);
         }
     }
-    let _ = parent; // unused — traversal is parent->child only
+    let _ = parent;
 }
 
 #[test]

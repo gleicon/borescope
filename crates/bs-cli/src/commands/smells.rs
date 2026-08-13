@@ -18,7 +18,7 @@ pub fn run(ctx: &Context, args: &SmellsArgs) -> Result<()> {
     let stats = store.get_all_file_stats()?;
     let cochange = store.get_all_cochange(5)?;
 
-    // D6: load per-repo risk thresholds; D13L2: load custom smell rules
+    // Load per-repo risk thresholds and custom smell rules
     let thresholds = load_thresholds(&ctx.repo_root);
     let custom_rules = load_custom_smells(&ctx.repo_root);
 
@@ -189,7 +189,7 @@ fn detect_semantic(
             });
         }
 
-        // heavy allocator in a hot symbol (D6: threshold from config)
+        // heavy allocator in a hot symbol
         if alloc_count > 2 && sym.hotspot > t.hotspot_high {
             report.semantic.push(SemanticSmell {
                 kind: "alloc_in_hotspot".to_string(),
@@ -202,7 +202,7 @@ fn detect_semantic(
             });
         }
 
-        // high cyclomatic complexity + high fanin + hotspot — likely a bottleneck (D6: thresholds)
+        // high cyclomatic complexity + high fanin + hotspot — likely a bottleneck
         if sym.complexity > t.complexity_high
             && fanin > t.fanin_high
             && sym.hotspot > t.hotspot_medium
@@ -243,7 +243,7 @@ fn detect_semantic(
     }
 }
 
-/// D13L2: apply user-defined pattern combination rules from `.borescope/smells.toml`.
+/// Apply user-defined pattern combination rules from `.borescope/smells.toml`.
 fn detect_custom_rules(
     symbols: &[bs_core::Symbol],
     rules: &[CustomSmellRule],

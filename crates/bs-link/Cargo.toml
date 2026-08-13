@@ -8,3 +8,6 @@ bs-core.workspace = true
 bs-extract.workspace = true
 anyhow.workspace = true
 rusqlite.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

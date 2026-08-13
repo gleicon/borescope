@@ -79,6 +79,8 @@ pub struct Store {
 }
 
 impl Store {
+    /// Create (or reopen) the index at `repo_root/.borescope/index.db`, creating the directory
+    /// and schema if they do not yet exist. Use `open_existing` when the index must already exist.
     pub fn open(repo_root: &Path) -> Result<Self> {
         let dir = repo_root.join(".borescope");
         std::fs::create_dir_all(&dir)?;
@@ -96,6 +98,8 @@ impl Store {
         Ok(store)
     }
 
+    /// Open an existing index at `repo_root/.borescope/index.db`. Returns `Error::NoIndex`
+    /// if the file does not exist — prefer this for read-only commands so they fail fast.
     pub fn open_existing(repo_root: &Path) -> Result<Self> {
         let db_path = repo_root.join(".borescope").join("index.db");
         if !db_path.exists() {
@@ -346,6 +350,8 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// Return co-change pairs involving `path`. `min_strength` is a Jaccard coefficient
+    /// (0.0–1.0); `min_support` is the minimum number of commits where both files changed.
     pub fn get_coupled(
         &self,
         path: &str,
@@ -375,8 +381,10 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// Return all files ordered by age (oldest first). The `zoom` parameter is accepted for
+    /// API compatibility but ignored in M0 — granularity is always file-level until M1+.
     pub fn get_age_view(&self, zoom: &str) -> Result<Vec<FileStat>> {
-        let _ = zoom; // file-level only in M0; zoom expansion in M1+
+        let _ = zoom;
         let mut stmt = self.conn.prepare(
             "SELECT f.path, f.lang, f.loc, g.churn, g.age_days,
                     g.last_commit_sha, g.last_commit_ts, g.hotspot

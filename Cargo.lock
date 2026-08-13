@@ -163,6 +163,7 @@ dependencies = [
  "bs-core",
  "bs-extract",
  "rusqlite",
+ "tempfile",
 ]
 
 [[package]]

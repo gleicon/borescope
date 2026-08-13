@@ -130,7 +130,7 @@ pub fn resolve_target(store: &Store, target: &str) -> Result<bs_core::Symbol> {
 /// Build a callee call tree rooted at `sym`.
 ///
 /// `path_confidence` is the cumulative product of edge confidences from the root to
-/// the current node. D2: a child is pruned when `path_confidence * edge_conf < min_conf`,
+/// the current node. A child is pruned when `path_confidence * edge_conf < min_conf`,
 /// preventing deep traversal through chains of uncertain edges.
 #[allow(clippy::too_many_arguments)]
 pub fn build_tree_node(
@@ -141,10 +141,11 @@ pub fn build_tree_node(
     min_conf: f32,
     path_confidence: f32,
     weight: Weight,
-    max_weight: f32,
+    max_churn: f32,
+    max_loc: f32,
     visited: &mut std::collections::HashSet<String>,
 ) -> bs_render::TreeNode {
-    let w = weight.score_symbol(sym, max_weight, max_weight);
+    let w = weight.score_symbol(sym, max_churn, max_loc);
     let mut node = bs_render::TreeNode::leaf(
         sym.id.clone(),
         sym.name.clone(),
@@ -159,12 +160,12 @@ pub fn build_tree_node(
     }
     visited.insert(sym.id.clone());
 
-    // Fetch all call edges (no per-edge floor) and apply path-product pruning (D2)
+    // Fetch all call edges (no per-edge floor) and apply path-product pruning
     if let Ok(callees) = store.get_callees(&sym.id, 0.0) {
         for (callee, conf) in callees {
             let child_path_conf = path_confidence * conf;
             if child_path_conf < min_conf {
-                continue; // D2: cumulative confidence too low — prune subtree
+                continue;
             }
             let mut child = build_tree_node(
                 store,
@@ -174,7 +175,8 @@ pub fn build_tree_node(
                 min_conf,
                 child_path_conf,
                 weight,
-                max_weight,
+                max_churn,
+                max_loc,
                 visited,
             );
             child.confidence = conf;
@@ -182,7 +184,7 @@ pub fn build_tree_node(
         }
     }
 
-    // D11: include external (unresolvable) callees as annotated leaf nodes
+    // Include external (unresolvable) callees as annotated leaf nodes
     if let Ok(externals) = store.get_external_callees(&sym.id) {
         for callee_name in externals {
             let mut ext = bs_render::TreeNode::leaf(
@@ -203,7 +205,7 @@ pub fn build_tree_node(
 
 /// Build a caller tree rooted at `sym` (inverted edges — who calls this?).
 ///
-/// `path_confidence` is the cumulative product from root to current node (D2).
+/// `path_confidence` is the cumulative product from root to current node.
 /// Callers trees do not have external nodes — external callers are outside the index.
 #[allow(clippy::too_many_arguments)]
 pub fn build_callers_tree_node(
@@ -214,10 +216,11 @@ pub fn build_callers_tree_node(
     min_conf: f32,
     path_confidence: f32,
     weight: Weight,
-    max_weight: f32,
+    max_churn: f32,
+    max_loc: f32,
     visited: &mut std::collections::HashSet<String>,
 ) -> bs_render::TreeNode {
-    let w = weight.score_symbol(sym, max_weight, max_weight);
+    let w = weight.score_symbol(sym, max_churn, max_loc);
     let mut node = bs_render::TreeNode::leaf(
         sym.id.clone(),
         sym.name.clone(),
@@ -236,7 +239,7 @@ pub fn build_callers_tree_node(
         for (caller, conf) in callers {
             let child_path_conf = path_confidence * conf;
             if child_path_conf < min_conf {
-                continue; // D2: prune low-confidence caller chains
+                continue;
             }
             let mut child = build_callers_tree_node(
                 store,
@@ -246,7 +249,8 @@ pub fn build_callers_tree_node(
                 min_conf,
                 child_path_conf,
                 weight,
-                max_weight,
+                max_churn,
+                max_loc,
                 visited,
             );
             child.confidence = conf;

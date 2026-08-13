@@ -50,6 +50,9 @@ impl Weight {
         }
     }
 
+    /// Return a normalized 0.0–1.0 weight for `sym`. `Weight::Fanin` and `Weight::Diff`
+    /// always return 0.0 here — callers that need fanin scores must pre-compute them from
+    /// `get_call_edge_counts` and set `TreeNode::weight` directly.
     pub fn score_symbol(&self, sym: &Symbol, max_churn: f32, max_loc: f32) -> f32 {
         match self {
             Weight::None => 0.0,
