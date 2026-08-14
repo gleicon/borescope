@@ -123,7 +123,7 @@ to Mermaid for dense call graphs. Neither format requires a runtime dependency.
 
 ```bash
 # Install the skill file (one-time)
-borescope skill > ~/.claude/skills/borescope.md
+mkdir -p ~/.claude/skills/borescope && borescope skill > ~/.claude/skills/borescope/SKILL.md
 ```
 
 Or copy `skill/SKILL.md` from the repo into `~/.claude/skills/borescope.md`.

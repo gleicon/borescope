@@ -32,7 +32,7 @@ cargo install --path crates/bs-cli   # from source, requires Rust 1.70+
 **Step 1 — install the skill** (one time, globally):
 
 ```bash
-borescope skill > ~/.claude/skills/borescope.md
+mkdir -p ~/.claude/skills/borescope && borescope skill > ~/.claude/skills/borescope/SKILL.md
 ```
 
 This embeds borescope into Claude Code's context. From now on, Claude Code knows to run

@@ -156,7 +156,7 @@ Works outside a git repository — no index required.
 
 ```bash
 # Claude Code (global — active in every repo)
-borescope skill > ~/.claude/skills/borescope.md
+mkdir -p ~/.claude/skills/borescope && borescope skill > ~/.claude/skills/borescope/SKILL.md
 
 # Cursor (repo-local rule with frontmatter)
 mkdir -p .cursor/rules

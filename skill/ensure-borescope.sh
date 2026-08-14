@@ -59,11 +59,11 @@ fi
 # ── 3. Install skill file (optional) ─────────────────────────────────────────
 
 if [ "$SKILL_FLAG" -eq 1 ]; then
-    SKILL_DIR="$HOME/.claude/skills"
+    SKILL_DIR="$HOME/.claude/skills/borescope"
     mkdir -p "$SKILL_DIR"
-    borescope skill > "$SKILL_DIR/borescope.md"
+    borescope skill > "$SKILL_DIR/SKILL.md"
     echo ""
-    echo "Claude Code skill installed: $SKILL_DIR/borescope.md"
+    echo "Claude Code skill installed: $SKILL_DIR/SKILL.md"
 fi
 
 if [ "$CURSOR_FLAG" -eq 1 ]; then
