@@ -1,4 +1,4 @@
-use super::{emit, has_pattern, open_store, resolve_target, Context};
+use super::{emit, has_pattern, open_store, resolve_target, risk, Context};
 use anyhow::Result;
 use clap::Args;
 
@@ -122,12 +122,10 @@ fn narrative(
     if !sym.patterns.is_empty() {
         lines.push(String::new());
         lines.push(format!("  patterns: {}", sym.patterns.join(", ")));
-        let has_lock = has_pattern(&sym.patterns, "lock");
-        let has_await = has_pattern(&sym.patterns, "await");
         let has_block = has_pattern(&sym.patterns, "block_on");
         let has_spawn = has_pattern(&sym.patterns, "spawn");
         let has_loop = has_pattern(&sym.patterns, "loop");
-        if has_lock && has_await {
+        if risk::is_dangerous(&sym.patterns) {
             lines.push(
                 "  ⚠ lock held across .await — risk of deadlock under async runtime".to_string(),
             );
@@ -171,30 +169,12 @@ fn narrative(
 
     lines.push(String::new());
     lines.push("  verdict:".to_string());
-    let risk = risk_level(sym, fanin);
-    lines.push(format!("    {}", risk));
+    let verdict = risk::risk_level(sym, fanin);
+    lines.push(format!("    {}", verdict));
 
     lines.join("\n")
 }
 
-fn risk_level(sym: &bs_core::Symbol, fanin: u32) -> &'static str {
-    let hot = sym.hotspot > 0.6;
-    let complex = sym.complexity > 10;
-    let central = fanin > 5;
-    let dangerous_pattern =
-        has_pattern(&sym.patterns, "lock") && has_pattern(&sym.patterns, "await");
-
-    match (hot, complex, central, dangerous_pattern) {
-        (_, _, _, true) => "HIGH RISK — dangerous concurrency pattern detected",
-        (true, true, true, _) => {
-            "HIGH RISK — hot, complex, and central; changes here are expensive"
-        }
-        (true, true, false, _) => "MEDIUM RISK — hot and complex, but limited blast radius",
-        (true, false, true, _) => "MEDIUM RISK — hot and central; keep changes minimal",
-        (false, true, true, _) => "MEDIUM RISK — complex and central; refactor carefully",
-        _ => "LOW RISK — cold, simple, or isolated",
-    }
-}
 
 #[derive(serde::Serialize)]
 struct ExplainJson {
@@ -214,7 +194,7 @@ struct ExplainJson {
 
 #[cfg(test)]
 mod tests {
-    use super::risk_level;
+    use super::risk;
     use bs_core::{LangId, Symbol, SymbolKind};
     use std::path::PathBuf;
 
@@ -239,36 +219,36 @@ mod tests {
     #[test]
     fn test_risk_dangerous_pattern_always_high() {
         let s = sym(0.0, 0, 0, &["lock", "await"]);
-        assert!(risk_level(&s, 0).starts_with("HIGH RISK"));
+        assert!(risk::risk_level(&s, 0).starts_with("HIGH RISK"));
     }
 
     #[test]
     fn test_risk_hot_complex_central_is_high() {
         let s = sym(0.8, 15, 10, &[]);
-        assert!(risk_level(&s, 10).starts_with("HIGH RISK"));
+        assert!(risk::risk_level(&s, 10).starts_with("HIGH RISK"));
     }
 
     #[test]
     fn test_risk_hot_and_complex_medium() {
         let s = sym(0.8, 15, 0, &[]);
-        assert!(risk_level(&s, 0).starts_with("MEDIUM RISK"));
+        assert!(risk::risk_level(&s, 0).starts_with("MEDIUM RISK"));
     }
 
     #[test]
     fn test_risk_hot_and_central_medium() {
         let s = sym(0.8, 3, 10, &[]);
-        assert!(risk_level(&s, 10).starts_with("MEDIUM RISK"));
+        assert!(risk::risk_level(&s, 10).starts_with("MEDIUM RISK"));
     }
 
     #[test]
     fn test_risk_complex_and_central_medium() {
         let s = sym(0.0, 15, 10, &[]);
-        assert!(risk_level(&s, 10).starts_with("MEDIUM RISK"));
+        assert!(risk::risk_level(&s, 10).starts_with("MEDIUM RISK"));
     }
 
     #[test]
     fn test_risk_cold_simple_low() {
         let s = sym(0.1, 2, 1, &[]);
-        assert!(risk_level(&s, 1).starts_with("LOW RISK"));
+        assert!(risk::risk_level(&s, 1).starts_with("LOW RISK"));
     }
 }

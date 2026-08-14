@@ -46,7 +46,7 @@ def find_borescope(override: str | None) -> Path:
     sys.exit("borescope binary not found; run `cargo build` first or pass --borescope PATH")
 
 
-def run(cmd: list[str], cwd: Path = None) -> subprocess.CompletedProcess:
+def exec_cmd(cmd: list[str], cwd: Path = None) -> subprocess.CompletedProcess:
     return subprocess.run(
         cmd, capture_output=True, text=True, cwd=cwd or Path.cwd()
     )
@@ -79,7 +79,7 @@ def run_skill_mode(borescope: Path, fixture: Path) -> dict:
         shutil.copytree(fixture, tmp_fixture)
 
         # Phase 1: index (no git — just structure)
-        index_result = run(
+        index_result = exec_cmd(
             [str(borescope), "index", "--no-git", "--repo", str(tmp_fixture)],
             cwd=tmp_fixture,
         )
@@ -87,7 +87,7 @@ def run_skill_mode(borescope: Path, fixture: Path) -> dict:
             sys.exit(f"borescope index failed:\n{index_result.stderr}")
 
         # Query callers of PaymentService.charge
-        callers_result = run(
+        callers_result = exec_cmd(
             [
                 str(borescope),
                 "-o", "json",

@@ -1,4 +1,4 @@
-use super::{emit, has_pattern, open_store, Context};
+use super::{emit, has_pattern, open_store, risk, Context};
 use anyhow::Result;
 use bs_core::Symbol;
 use bs_git::Miner;
@@ -127,13 +127,7 @@ fn render_text(
     // High-risk: must have real signals — pure hotspot with complexity=0 means new/trivial file
     let high_risk: Vec<_> = syms
         .iter()
-        .filter(|(s, fi, _)| {
-            let dangerous = has_pattern(&s.patterns, "lock") && has_pattern(&s.patterns, "await");
-            dangerous
-                || (s.hotspot > 0.5 && s.complexity > 8)
-                || (s.hotspot > 0.7 && s.complexity > 3)
-                || (*fi > 8 && s.complexity > 3)
-        })
+        .filter(|(s, fi, _)| risk::is_high_risk_pr(s, *fi))
         .collect();
 
     out.push_str(&format!("\nhigh-risk symbols ({}):\n", high_risk.len()));
@@ -220,7 +214,7 @@ fn render_text(
     let n_missed = missed_partners.len();
     let has_dangerous = syms
         .iter()
-        .any(|(s, _, _)| has_pattern(&s.patterns, "lock") && has_pattern(&s.patterns, "await"));
+        .any(|(s, _, _)| risk::is_dangerous(&s.patterns));
     if has_dangerous || n_high > 5 {
         out.push_str("  HIGH RISK — review high-risk symbols carefully before merge\n");
     } else if n_high > 0 || n_missed > 3 {
@@ -278,10 +272,7 @@ fn render_json(
 
     let high_risk: Vec<SymEntry> = syms
         .iter()
-        .filter(|(s, fi, _)| {
-            let dangerous = has_pattern(&s.patterns, "lock") && has_pattern(&s.patterns, "await");
-            dangerous || (s.hotspot > 0.5 && s.complexity > 8) || (s.hotspot > 0.7) || (*fi > 8)
-        })
+        .filter(|(s, fi, _)| risk::is_high_risk_pr(s, *fi))
         .map(|(s, fi, _)| SymEntry {
             qualified: &s.qualified,
             hotspot: s.hotspot,
