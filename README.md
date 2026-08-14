@@ -27,29 +27,63 @@ cargo install --path crates/bs-cli   # from source, requires Rust 1.70+
 # or: download a release binary from GitHub Releases
 ```
 
-### AI coding platform integration
+### Use with Claude Code
 
-After installing the binary, one command installs the skill into your AI coding platform:
+**Step 1 — install the skill** (one time, globally):
 
 ```bash
-# Claude Code — installs globally, active in every repo
 borescope skill > ~/.claude/skills/borescope.md
+```
 
-# Cursor — installs as a repo-local rule
+This embeds borescope into Claude Code's context. From now on, Claude Code knows to run
+`borescope` instead of reading files when navigating or editing code in any repo.
+
+**Step 2 — index your repo** (once per repo, re-run after large merges):
+
+```bash
+cd your-repo
+borescope index --no-git    # fast — structural queries ready immediately
+borescope index --git &     # background — adds hotspot/churn/co-change signals
+```
+
+**Step 3 — open Claude Code and start working.**
+
+Claude Code will automatically:
+- Run `borescope callers <file>:<symbol>` before modifying a function to find all callers
+- Run `borescope paths <symbol> --analyze` to understand what a symbol reaches before touching it
+- Use `borescope diff` after edits to check blast radius
+- Prefer `borescope explain <symbol>` over reading the source file for context
+
+You can also ask explicitly:
+```
+"what calls db.go:InsertOrder?"
+"trace the path from handler to db and show load signals"
+"what changed in the call tree compared to main?"
+"show the antipattern report"
+```
+
+Claude Code will translate these into the right `borescope` commands using the skill instructions.
+
+### Use with Cursor
+
+```bash
 mkdir -p .cursor/rules
 borescope skill > .cursor/rules/borescope.md
-
-# OpenHands / any agent with system-prompt support
-borescope skill > /tmp/borescope-skill.md
 ```
 
-Or run the installer script (installs binary + skill in one step):
+### Use with OpenHands or other agents
+
 ```bash
-./skill/ensure-borescope.sh --skill    # binary + Claude Code skill
-./skill/ensure-borescope.sh --cursor   # binary + Cursor rule
+borescope skill > /tmp/borescope-skill.md
+# pass to your agent's --system-prompt-file flag or equivalent
 ```
 
-`borescope skill` prints the embedded skill file to stdout — no network, no repo required.
+### All-in-one installer
+
+```bash
+./skill/ensure-borescope.sh --skill    # installs binary + Claude Code skill
+./skill/ensure-borescope.sh --cursor   # installs binary + Cursor rule
+```
 
 ## 30-second start
 
