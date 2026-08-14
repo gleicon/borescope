@@ -93,7 +93,7 @@ checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
 
 [[package]]
 name = "bs-cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bs-core",
@@ -110,7 +110,7 @@ dependencies = [
 
 [[package]]
 name = "bs-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "rusqlite",
@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "bs-extract"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bs-core",
@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "bs-git"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bs-core",
@@ -157,7 +157,7 @@ dependencies = [
 
 [[package]]
 name = "bs-link"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bs-core",
@@ -168,7 +168,7 @@ dependencies = [
 
 [[package]]
 name = "bs-render"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "bs-core",
