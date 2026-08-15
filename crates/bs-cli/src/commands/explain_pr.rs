@@ -212,9 +212,7 @@ fn render_text(
     out.push_str("\nverdict:\n");
     let n_high = high_risk.len();
     let n_missed = missed_partners.len();
-    let has_dangerous = syms
-        .iter()
-        .any(|(s, _, _)| risk::is_dangerous(&s.patterns));
+    let has_dangerous = syms.iter().any(|(s, _, _)| risk::is_dangerous(&s.patterns));
     if has_dangerous || n_high > 5 {
         out.push_str("  HIGH RISK — review high-risk symbols carefully before merge\n");
     } else if n_high > 0 || n_missed > 3 {

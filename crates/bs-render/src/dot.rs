@@ -32,17 +32,24 @@ pub fn render_sequence(root: &TreeNode, no_fence: bool) -> String {
         }
     }
 
-    let mut out =
-        String::from("digraph borescope_path {\n    rankdir=LR;\n    node [shape=box fontname=monospace];\n");
+    let mut out = String::from(
+        "digraph borescope_path {\n    rankdir=LR;\n    node [shape=box fontname=monospace];\n",
+    );
 
     for node in &chain {
         let label = dot_escape(&node.qualified);
         let weight_attr = if node.weight > 0.0 {
-            format!(" fillcolor=\"/reds/9/{:.0}\" style=filled", (node.weight * 8.0).ceil().max(1.0))
+            format!(
+                " fillcolor=\"/reds/9/{:.0}\" style=filled",
+                (node.weight * 8.0).ceil().max(1.0)
+            )
         } else {
             String::new()
         };
-        out.push_str(&format!("    \"{}\" [label=\"{}\"{weight_attr}];\n", label, label));
+        out.push_str(&format!(
+            "    \"{}\" [label=\"{}\"{weight_attr}];\n",
+            label, label
+        ));
     }
 
     for i in 0..chain.len().saturating_sub(1) {
@@ -168,10 +175,7 @@ pub fn render_class(findings: &[(String, String)], no_fence: bool) -> String {
         out.push_str("        style=rounded;\n");
         for kind in kinds.iter().take(6) {
             let ke = dot_escape(kind);
-            out.push_str(&format!(
-                "        \"{}:{}\" [label=\"{}\"];\n",
-                fe, ke, ke
-            ));
+            out.push_str(&format!("        \"{}:{}\" [label=\"{}\"];\n", fe, ke, ke));
         }
         if kinds.len() > 6 {
             out.push_str(&format!(

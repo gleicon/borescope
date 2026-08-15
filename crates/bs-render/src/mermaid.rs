@@ -18,7 +18,13 @@ fn fence(content: &str, no_fence: bool) -> String {
 
 fn safe_id(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -39,19 +45,11 @@ pub fn render_sequence(root: &TreeNode, no_fence: bool) -> String {
     let mut out = String::from("sequenceDiagram\n");
     let ids: Vec<String> = chain
         .iter()
-        .map(|n| {
-            format!(
-                "P{}",
-                safe_id(&n.id).chars().take(24).collect::<String>()
-            )
-        })
+        .map(|n| format!("P{}", safe_id(&n.id).chars().take(24).collect::<String>()))
         .collect();
 
     for (i, node) in chain.iter().enumerate() {
-        out.push_str(&format!(
-            "    participant {} as {}\n",
-            ids[i], node.name
-        ));
+        out.push_str(&format!("    participant {} as {}\n", ids[i], node.name));
     }
 
     for i in 0..chain.len().saturating_sub(1) {
@@ -61,10 +59,7 @@ pub fn render_sequence(root: &TreeNode, no_fence: bool) -> String {
         } else {
             "calls".to_string()
         };
-        out.push_str(&format!(
-            "    {}->>+{}: {}\n",
-            ids[i], ids[i + 1], label
-        ));
+        out.push_str(&format!("    {}->>+{}: {}\n", ids[i], ids[i + 1], label));
     }
 
     fence(&out, no_fence)
@@ -91,22 +86,29 @@ fn render_flowchart_nodes(
 ) {
     let indent = "    ".repeat(depth + 1);
     for node in nodes {
-        let nid = format!("N{}", safe_id(&node.id).chars().take(30).collect::<String>());
+        let nid = format!(
+            "N{}",
+            safe_id(&node.id).chars().take(30).collect::<String>()
+        );
         let label = if node.weight > 0.0 {
             format!("{}\\nw={:.2}", node.name, node.weight)
         } else {
             node.name.clone()
         };
         let shape = if node.external { "(({}))" } else { "[\"{}\"]" };
-        out.push_str(&format!("{}{}{};\n", indent, nid, shape.replace("{}", &label)));
+        out.push_str(&format!(
+            "{}{}{};\n",
+            indent,
+            nid,
+            shape.replace("{}", &label)
+        ));
 
         for child in &node.children {
-            let cid =
-                format!("N{}", safe_id(&child.id).chars().take(30).collect::<String>());
-            edges.push(format!(
-                "{}{}-->{}\n",
-                indent, nid, cid
-            ));
+            let cid = format!(
+                "N{}",
+                safe_id(&child.id).chars().take(30).collect::<String>()
+            );
+            edges.push(format!("{}{}-->{}\n", indent, nid, cid));
         }
 
         if !node.children.is_empty() {

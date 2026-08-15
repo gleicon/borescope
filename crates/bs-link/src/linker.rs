@@ -158,7 +158,13 @@ mod tests {
 
     fn unresolved_edge(store: &Store, from: &str, callee_name: &str) {
         store
-            .upsert_edge(from, &format!("unresolved:{}", callee_name), &EdgeKind::Calls, 0.3, None)
+            .upsert_edge(
+                from,
+                &format!("unresolved:{}", callee_name),
+                &EdgeKind::Calls,
+                0.3,
+                None,
+            )
             .unwrap();
     }
 
@@ -167,7 +173,8 @@ mod tests {
             .conn
             .prepare("SELECT confidence FROM edges WHERE from_id=?1 AND to_id=?2")
             .unwrap();
-        stmt.query_row(rusqlite::params![from, to], |r| r.get(0)).ok()
+        stmt.query_row(rusqlite::params![from, to], |r| r.get(0))
+            .ok()
     }
 
     #[test]

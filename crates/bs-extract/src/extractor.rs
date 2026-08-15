@@ -325,20 +325,26 @@ fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
         }
 
         let file_sym_id = format!("file:{}", pf.rel_path);
-        store.upsert_edge(&file_sym_id, &id, &EdgeKind::Contains, 1.0, None).ok();
+        store
+            .upsert_edge(&file_sym_id, &id, &EdgeKind::Contains, 1.0, None)
+            .ok();
     }
 
     for import in &pf.imports {
         let from_id = stable_id(&pf.rel_path, &pf.rel_path, &SymbolKind::File);
         let to_id = format!("import:{}", import);
-        store.upsert_edge(&from_id, &to_id, &EdgeKind::Imports, 1.0, None).ok();
+        store
+            .upsert_edge(&from_id, &to_id, &EdgeKind::Imports, 1.0, None)
+            .ok();
     }
 
     for call in &pf.calls {
         let callee_id = format!("unresolved:{}", call.callee);
         if let Some(enc) = enclosing_def(&pf.defs, call.line) {
             let enc_id = stable_id(&pf.rel_path, &enc.name, &enc.kind);
-            store.upsert_edge(&enc_id, &callee_id, &EdgeKind::Calls, 0.3, None).ok();
+            store
+                .upsert_edge(&enc_id, &callee_id, &EdgeKind::Calls, 0.3, None)
+                .ok();
         }
     }
 

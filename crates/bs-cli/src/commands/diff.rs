@@ -55,9 +55,7 @@ pub fn run(ctx: &Context, args: &DiffArgs) -> Result<()> {
         OutputFormat::Tui => {
             return bs_render::tui::run_tui(&nodes, "diff", ctx.weight.describe());
         }
-        OutputFormat::Mermaid => {
-            bs_render::mermaid::render_flowchart(&nodes, "TD", ctx.no_fence)
-        }
+        OutputFormat::Mermaid => bs_render::mermaid::render_flowchart(&nodes, "TD", ctx.no_fence),
         OutputFormat::Dot => bs_render::dot::render_flowchart(&nodes, ctx.no_fence),
     };
 

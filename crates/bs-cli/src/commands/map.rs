@@ -128,7 +128,10 @@ pub fn run(ctx: &Context, args: &MapArgs) -> Result<()> {
                         return bs_render::tui::run_tui(&nodes, "map", ctx.weight.describe());
                     }
                     OutputFormat::Mermaid => {
-                        emit(ctx, &bs_render::mermaid::render_flowchart(&nodes, "TD", ctx.no_fence));
+                        emit(
+                            ctx,
+                            &bs_render::mermaid::render_flowchart(&nodes, "TD", ctx.no_fence),
+                        );
                         return Ok(());
                     }
                     OutputFormat::Dot => {

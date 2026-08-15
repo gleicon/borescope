@@ -25,7 +25,10 @@ pub fn run(ctx: &Context, args: &PathsArgs) -> Result<()> {
     let sym = resolve_target(&store, &args.target)?;
 
     let all_syms = store.all_symbols()?;
-    let max_churn = all_syms.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
+    let max_churn = all_syms
+        .iter()
+        .map(|s| s.churn as f32)
+        .fold(0.0f32, f32::max);
     let max_loc = all_syms.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 
     // --to mode — BFS to find shortest path to a target symbol
@@ -187,7 +190,12 @@ fn enrich_with_patterns(store: &Store, syms: &[Symbol]) -> Vec<Symbol> {
 }
 
 /// Build a linear TreeNode chain from a path (root → child → grandchild → ...).
-fn build_path_tree(path: &[Symbol], max_churn: f32, max_loc: f32, weight: bs_render::Weight) -> TreeNode {
+fn build_path_tree(
+    path: &[Symbol],
+    max_churn: f32,
+    max_loc: f32,
+    weight: bs_render::Weight,
+) -> TreeNode {
     let make_node = |sym: &Symbol| -> TreeNode {
         let mut n = TreeNode::leaf(
             sym.id.clone(),
@@ -540,7 +548,9 @@ mod tests {
     }
 
     fn insert_edge(store: &Store, from: &str, to: &str, conf: f32) {
-        store.upsert_edge(from, to, &EdgeKind::Calls, conf, None).unwrap();
+        store
+            .upsert_edge(from, to, &EdgeKind::Calls, conf, None)
+            .unwrap();
     }
 
     // --- find_path_to tests ---
@@ -620,7 +630,7 @@ mod tests {
         insert_sym(&store, &a);
         insert_sym(&store, &b);
         insert_edge(&store, "a", "b", 0.2); // low confidence edge
-        // min_conf=0.5 prunes this edge
+                                            // min_conf=0.5 prunes this edge
         assert!(find_path_to(&store, &a, &b, 4, 0.5).is_none());
     }
 
@@ -657,7 +667,9 @@ mod tests {
         let mut sym = make_sym("a", "blocker", "src/a.rs");
         sym.patterns = vec!["block_on".to_string()];
         let sigs = analyze_symbols(&[sym], &store);
-        assert!(sigs.iter().any(|s| s.kind == "blocking_async" && s.severity == "high"));
+        assert!(sigs
+            .iter()
+            .any(|s| s.kind == "blocking_async" && s.severity == "high"));
     }
 
     #[test]
@@ -675,7 +687,9 @@ mod tests {
         let mut sym = make_sym("a", "hot", "src/a.rs");
         sym.hotspot = 0.9;
         let sigs = analyze_symbols(&[sym], &store);
-        assert!(sigs.iter().any(|s| s.kind == "hot_symbol" && s.severity == "medium"));
+        assert!(sigs
+            .iter()
+            .any(|s| s.kind == "hot_symbol" && s.severity == "medium"));
     }
 
     #[test]

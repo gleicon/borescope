@@ -175,7 +175,6 @@ fn narrative(
     lines.join("\n")
 }
 
-
 #[derive(serde::Serialize)]
 struct ExplainJson {
     symbol: String,

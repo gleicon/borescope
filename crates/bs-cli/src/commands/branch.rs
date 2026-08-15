@@ -95,9 +95,7 @@ pub fn run(ctx: &Context, args: &BranchArgs) -> Result<()> {
                 ctx.weight.describe(),
             );
         }
-        OutputFormat::Mermaid => {
-            bs_render::mermaid::render_flowchart(&nodes, "TD", ctx.no_fence)
-        }
+        OutputFormat::Mermaid => bs_render::mermaid::render_flowchart(&nodes, "TD", ctx.no_fence),
         OutputFormat::Dot => bs_render::dot::render_flowchart(&nodes, ctx.no_fence),
     };
 

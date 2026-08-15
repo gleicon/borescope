@@ -19,7 +19,10 @@ pub fn run(ctx: &Context, args: &CallersArgs) -> Result<()> {
     let sym = resolve_target(&store, &args.target)?;
 
     let all_syms = store.all_symbols()?;
-    let max_churn = all_syms.iter().map(|s| s.churn as f32).fold(0.0f32, f32::max);
+    let max_churn = all_syms
+        .iter()
+        .map(|s| s.churn as f32)
+        .fold(0.0f32, f32::max);
     let max_loc = all_syms.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 
     let mut visited = HashSet::new();
