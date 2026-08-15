@@ -51,7 +51,7 @@ borescope diff                  # tree view for PR description
 ```bash
 borescope map --weight hotspot   # file × symbol heatmap, sorted by risk
 borescope smells                 # structural + semantic antipattern report
-borescope hotspots --top 15      # ranked churn × complexity table
+borescope hotspots --top 15      # ranked by churn × recency (hottest production files first)
 ```
 
 **Plain-English profile**:

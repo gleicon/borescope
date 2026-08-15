@@ -94,7 +94,7 @@ cd your-repo
 borescope index --no-git            # fast — paths/callers/map/explain ready now
 borescope index --git &             # background — hotspots/smells/age ready when done
 
-borescope hotspots                  # what's hot and complex?
+borescope hotspots                  # production files ranked by churn × recency
 borescope map --weight hotspot -o tui   # navigate the whole repo interactively
 borescope smells                    # antipattern + semantic risk report
 borescope explain src/auth.rs:verify    # plain-English symbol profile
@@ -124,7 +124,7 @@ borescope smells
 borescope hotspots --top 20
 borescope map --weight hotspot -o tui
 ```
-In under a minute: which files are tightly coupled, which symbols are hot and complex, which have dangerous concurrency patterns, and a navigable call graph of the whole thing.
+In under a minute: which production files change constantly and recently (test files filtered out automatically), which are tightly coupled, which have dangerous concurrency patterns, and a navigable call graph of the whole thing.
 
 ### You're using an agent to do the work
 ```bash

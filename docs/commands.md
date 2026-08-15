@@ -86,10 +86,29 @@ Changed files, high-risk symbols, co-change warnings (missing files), semantic p
 ### hotspots
 
 ```bash
-borescope hotspots [--top N]
+borescope hotspots [--top N] [--include-tests]
 ```
 
-Churn × complexity ranking. Requires git phase.
+Ranks files by `hotspot = churn × recency` (exponential decay with 230-day half-life). A score
+near 1.0 means the file changes constantly and was touched very recently — high blast radius if
+it breaks. Requires git phase.
+
+Test files (`tests/`, `*_test.rs`, `*.spec.ts`, etc.) are excluded by default so the table shows
+production-code risk only. Pass `--include-tests` to include them.
+
+Example output:
+
+```
+hotspot = churn × recency  (1.0 = changed constantly and just recently; 0.0 = never touched)
+
+hotspot  churn  age      heat            file
+------------------------------------------------------------------------
+0.857    22     3 days   🔥 very hot     src/http/router.rs
+0.612    15     2 wks    🔥 hot          src/auth/token.rs
+0.234    8      3 mo     mild            src/config.rs
+
+(test files hidden — pass --include-tests to show them)
+```
 
 ### coupled
 

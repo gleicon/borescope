@@ -22,13 +22,31 @@ borescope explain-pr <branch>                # PR impact analysis
 ```bash
 cd some-repo
 borescope index --git
+borescope hotspots --top 15              # what production files change constantly and recently?
 borescope smells                         # where are the structural + semantic problems?
-borescope hotspots --top 15              # what's actively risky?
 borescope map --weight hotspot -o tui    # navigate the whole tree interactively
 borescope explain <top-hotspot-fn>       # understand the riskiest symbol
 ```
 
-**What you get**: within 30 seconds you know which symbols are hot/complex/central, which files are tightly coupled, which have dangerous concurrency patterns, and a plain-English profile of the worst offender.
+`hotspots` output (test files hidden by default — `--include-tests` to show them):
+
+```
+hotspot = churn × recency  (1.0 = changed constantly and just recently; 0.0 = never touched)
+
+hotspot  churn  age      heat            file
+------------------------------------------------------------------------
+0.857    22     3 days   🔥 very hot     src/http/router.rs
+0.714    18     1 wks    🔥 hot          src/auth/token.rs
+0.412    11     6 wks    warm            src/db/pool.rs
+0.089    4      8 mo     cool            src/config.rs
+```
+
+Read the table as: "router.rs changed 22 times, last touched 3 days ago — if something's broken,
+start here." The recency decay means a file touched 8 months ago ranks lower even if it has high
+raw churn — it's not the active fire today.
+
+**What you get**: within 30 seconds you know which production files are the active fire risk,
+which have structural antipatterns, and a plain-English profile of the worst offender.
 
 ---
 
@@ -244,10 +262,19 @@ borescope smells --recommend
 All commands support `-o json`. Schema 1 is stable (additive only):
 
 ```bash
-borescope hotspots --top 5 -o json | jq '.nodes[] | {name: .name, hotspot: .weight}'
+# hotspots: flat array of {path, churn, age_days, hotspot, lang, loc, …}
+borescope hotspots --top 5 -o json | jq '.[] | {path, hotspot, churn}'
+
+# callers: {root: {name, file, children: […]}}
 borescope callers src/auth.rs:verify -o json | jq '.root.children | length'
+
+# smells: {shotgun_surgery, god_file, tangled_pair, semantic: [{kind, symbol, file, detail}], …}
 borescope smells -o json | jq '.semantic | group_by(.kind) | map({kind: .[0].kind, count: length})'
+
+# explain: {symbol, file, kind, span, loc, complexity, churn, hotspot, fanin, fanout, patterns, cochange_partners}
 borescope explain dispatch_to_worker_pool -o json | jq '{hotspot, complexity, fanin, patterns}'
+
+# explain-pr: {branch, base, changed_files, high_risk: […], missed_cochange: […], …}
 borescope explain-pr feature/branch -o json | jq '.missed_cochange'
 ```
 
