@@ -328,7 +328,12 @@ impl Store {
 
     // ---------- queries ----------
 
-    pub fn get_hotspots(&self, top_n: usize) -> Result<Vec<FileStat>> {
+    /// Return the top `top_n` hotspot files ordered by hotspot score descending.
+    /// When `exclude_tests` is true, paths matching common test conventions are dropped
+    /// before the limit is applied (over-fetches internally so the limit is still honoured).
+    pub fn get_hotspots(&self, top_n: usize, exclude_tests: bool) -> Result<Vec<FileStat>> {
+        // Over-fetch so that after test filtering we still have enough rows.
+        let fetch_n = if exclude_tests { top_n * 8 } else { top_n };
         let mut stmt = self.conn.prepare(
             "SELECT f.path, f.lang, f.loc, g.churn, g.age_days,
                     g.last_commit_sha, g.last_commit_ts, g.hotspot
@@ -336,8 +341,17 @@ impl Store {
              ORDER BY g.hotspot DESC, g.churn DESC
              LIMIT ?1",
         )?;
-        let rows = stmt.query_map(params![top_n as i64], file_stat_from_row)?;
-        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+        let rows = stmt.query_map(params![fetch_n as i64], file_stat_from_row)?;
+        let all: Vec<FileStat> = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        if exclude_tests {
+            Ok(all
+                .into_iter()
+                .filter(|f| !is_test_path(&f.path))
+                .take(top_n)
+                .collect())
+        } else {
+            Ok(all)
+        }
     }
 
     pub fn get_all_file_stats(&self) -> Result<Vec<FileStat>> {
@@ -652,6 +666,52 @@ impl Store {
     }
 }
 
+/// Return true when `path` looks like a test file by convention.
+/// Matches: test/ tests/ testdata/ __tests__/ spec/ fixtures/ directories,
+/// and file suffixes _test.rs _test.go .test.ts .test.js .spec.ts .spec.js Test.java _spec.rb.
+pub fn is_test_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    // Directory segments
+    for seg in [
+        "/test/",
+        "/tests/",
+        "/testdata/",
+        "/__tests__/",
+        "/spec/",
+        "/fixtures/",
+        "/mocks/",
+    ] {
+        if p.contains(seg) {
+            return true;
+        }
+    }
+    // Root-level test directories (no leading slash)
+    for prefix in ["test/", "tests/", "testdata/", "spec/", "fixtures/"] {
+        if p.starts_with(prefix) {
+            return true;
+        }
+    }
+    // File suffixes
+    for suffix in [
+        "_test.rs",
+        "_test.go",
+        "_test.py",
+        ".test.ts",
+        ".test.tsx",
+        ".test.js",
+        ".spec.ts",
+        ".spec.tsx",
+        ".spec.js",
+        "Test.java",
+        "_spec.rb",
+    ] {
+        if p.ends_with(suffix) {
+            return true;
+        }
+    }
+    false
+}
+
 fn file_stat_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<FileStat> {
     let lang_str: String = r.get(1)?;
     Ok(FileStat {
@@ -812,5 +872,33 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let _ = Store::open(tmp.path()).unwrap();
         let _ = Store::open(tmp.path()).unwrap();
+    }
+
+    #[test]
+    fn test_is_test_path_detects_directories() {
+        assert!(is_test_path("tests/integration/auth.rs"));
+        assert!(is_test_path("src/tests/mod.rs"));
+        assert!(is_test_path("testdata/fixtures/sample.json"));
+        assert!(is_test_path("__tests__/handler.test.ts"));
+        assert!(is_test_path("spec/models/user_spec.rb"));
+    }
+
+    #[test]
+    fn test_is_test_path_detects_suffixes() {
+        assert!(is_test_path("src/auth/auth_test.rs"));
+        assert!(is_test_path("src/auth_test.go"));
+        assert!(is_test_path("src/handler.test.ts"));
+        assert!(is_test_path("src/handler.spec.js"));
+        assert!(is_test_path("src/AuthTest.java"));
+        assert!(is_test_path("src/user_spec.rb"));
+    }
+
+    #[test]
+    fn test_is_test_path_passes_production_files() {
+        assert!(!is_test_path("src/auth.rs"));
+        assert!(!is_test_path("src/http/router.rs"));
+        assert!(!is_test_path("crates/bs-core/src/store.rs"));
+        assert!(!is_test_path("src/latest_context.ts"));
+        assert!(!is_test_path("src/protest.rs")); // "protest" contains "test" but is not a test
     }
 }
