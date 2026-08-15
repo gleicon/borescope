@@ -256,11 +256,31 @@ borescope explain-pr feature/branch -o json | jq '.missed_cochange'
 ## 13. Generate a flamegraph from the call tree
 
 ```bash
-borescope paths src/http/router.rs:dispatch_to_worker_pool -o folded | inferno-flamegraph > flame.svg
+cargo install inferno   # one-time
+
+borescope paths src/http/router.rs:dispatch_to_worker_pool \
+  --weight hotspot \
+  -o folded \
+  | inferno-flamegraph \
+      --title "HTTP request → V8 isolate" \
+      --colors rust \
+      --width 1400 \
+  > flame.svg
 open flame.svg
 ```
 
-Folded output is Brendan Gregg format. Install `inferno`: `cargo install inferno`.
+Folded output is Brendan Gregg collapsed format. Each leaf in the call tree becomes a stack frame;
+width is proportional to the `--weight` score (uniform if no weight is chosen).
+
+**Real example — HTTP request to V8 isolate** (from [nano-rs](https://github.com/gleicon/nano-rs)):
+
+![HTTP request to V8 isolate](docs/screenshots/flame-request-to-isolate.svg)
+
+The graph traces the full static path from the HTTP ingress through the worker pool
+MPSC channel (`[mpsc]`) to the V8 isolate compiling and evaluating `index.js`. The three
+V8 module lifecycle phases (`compile_module_graph`, `instantiate_module`, `evaluate_module`)
+are visible as distinct sub-frames inside `execute_esm_module`, making the compilation
+cost breakdown immediately readable — without ever running the server.
 
 ---
 

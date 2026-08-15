@@ -72,15 +72,58 @@ Full schema documentation: [`docs/agent-contract.md`](agent-contract.md).
 
 ## folded
 
-Brendan Gregg collapsed format — pipe to `inferno-flamegraph` to produce SVG.
+Brendan Gregg collapsed format — pipe to `inferno-flamegraph` to produce an interactive SVG flame graph.
 
 ```bash
-borescope paths src/http/router.rs:dispatch -o folded \
-  | inferno-flamegraph > flame.svg
+# Install inferno once
+cargo install inferno
+
+# Generate a flame graph SVG from the call tree of any entry point
+borescope paths src/http/router.rs:dispatch_to_worker_pool -o folded \
+  | inferno-flamegraph \
+      --title "HTTP request → V8 isolate" \
+      --colors rust \
+      --width 1400 \
+  > flame.svg
 open flame.svg
 ```
 
-Install inferno: `cargo install inferno`.
+Each leaf in the call tree becomes a stack frame. Leaf width is proportional to the `--weight` score
+(or uniform width of 1 when no weight is chosen — every reachable path gets equal visual weight).
+
+### Example: HTTP request to V8 isolate executing index.js
+
+The graph below was generated from [nano-rs](https://github.com/gleicon/nano-rs), a multi-tenant
+JavaScript runtime. It traces the full static call path from the HTTP ingress
+(`sliver_js_handler`) through the worker pool channel boundary to the V8 isolate compiling and
+evaluating `index.js`:
+
+![HTTP request to V8 isolate — flame graph](screenshots/flame-request-to-isolate.svg)
+
+The `[mpsc]` frame marks the MPSC channel hand-off where the HTTP thread passes the request to a
+dedicated worker thread that owns the V8 isolate. Frames to the left of `[mpsc]` run on the HTTP
+thread; frames to the right run on the worker thread.
+
+Key regions:
+
+| Region | What it shows |
+|---|---|
+| `NanoIsolate::new_with_vfs_and_limit → init_platform` | V8 isolate cold-start (12%) |
+| `RuntimeAPIs::bind_all` | Web APIs (fetch, console, crypto…) wired into the context |
+| `compile_esm_handler → execute_esm_module` | ESM module compilation (38%) |
+| `compile_module_graph / instantiate_module / evaluate_module` | Three V8 module lifecycle phases |
+| `invoke_fetch_handler → v8::Function::call` | Fetch handler dispatch back into JS (19%) |
+
+Generate the same graph for your own codebase:
+
+```bash
+# Step 1: index (structural queries only — no git needed)
+borescope index --no-git
+
+# Step 2: trace from HTTP entry to JS execution, save flame graph
+borescope paths src/http/server.rs:handle_request -o folded \
+  | inferno-flamegraph --title "request path" --colors rust > flame.svg
+```
 
 ---
 
