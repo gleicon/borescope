@@ -126,7 +126,7 @@ to Mermaid for dense call graphs. Neither format requires a runtime dependency.
 mkdir -p ~/.claude/skills/borescope && borescope skill > ~/.claude/skills/borescope/SKILL.md
 ```
 
-Or copy `skill/SKILL.md` from the repo into `~/.claude/skills/borescope.md`.
+Or copy `skill/SKILL.md` from the repo into `~/.claude/skills/borescope/SKILL.md`.
 
 The skill is loaded automatically by Claude Code when you work in any repo that has a
 `.borescope/index.db` file.

@@ -13,8 +13,7 @@ pub fn render_folded(nodes: &[TreeNode]) -> String {
 fn emit_paths(out: &mut String, node: &TreeNode, stack: &mut Vec<String>) {
     stack.push(node.name.clone());
     if node.children.is_empty() {
-        // Minimum count of 1: inferno drops zero-count stacks entirely.
-        // When no weight is chosen, every reachable path counts as 1 occurrence.
+        // inferno drops zero-count stacks; minimum 1 so structural graphs always render.
         let weight_int = ((node.weight * 1000.0).round() as u64).max(1);
         out.push_str(&format!("{} {}\n", stack.join(";"), weight_int));
     } else {

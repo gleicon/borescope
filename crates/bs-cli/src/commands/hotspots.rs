@@ -21,7 +21,6 @@ pub fn run(ctx: &Context, args: &HotspotsArgs) -> Result<()> {
         bs_render::OutputFormat::Json => serde_json::to_string_pretty(&stats).unwrap_or_default(),
         _ => {
             let mut out = String::new();
-            // One-line explanation so first-time users immediately understand what they're seeing.
             out.push_str(
                 "hotspot = churn × recency  (1.0 = changed constantly and just recently; 0.0 = never touched)\n\n",
             );

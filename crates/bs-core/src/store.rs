@@ -1,6 +1,7 @@
 use crate::{
     error::Error,
     model::{CoChange, EdgeKind, FileStat, LangId, Symbol, SymbolKind},
+    util::is_test_path,
     Result,
 };
 use rusqlite::{params, Connection};
@@ -329,11 +330,12 @@ impl Store {
     // ---------- queries ----------
 
     /// Return the top `top_n` hotspot files ordered by hotspot score descending.
-    /// When `exclude_tests` is true, paths matching common test conventions are dropped
-    /// before the limit is applied (over-fetches internally so the limit is still honoured).
+    /// When `exclude_tests` is true, all rows are fetched (LIMIT -1) and filtered in Rust
+    /// before truncating — file counts are bounded and a SQL LIMIT before filtering would
+    /// silently under-deliver in test-heavy repos.
     pub fn get_hotspots(&self, top_n: usize, exclude_tests: bool) -> Result<Vec<FileStat>> {
-        // Over-fetch so that after test filtering we still have enough rows.
-        let fetch_n = if exclude_tests { top_n * 8 } else { top_n };
+        // LIMIT -1 = no limit in SQLite; used when we need to filter in Rust first.
+        let limit = if exclude_tests { -1i64 } else { top_n as i64 };
         let mut stmt = self.conn.prepare(
             "SELECT f.path, f.lang, f.loc, g.churn, g.age_days,
                     g.last_commit_sha, g.last_commit_ts, g.hotspot
@@ -341,7 +343,7 @@ impl Store {
              ORDER BY g.hotspot DESC, g.churn DESC
              LIMIT ?1",
         )?;
-        let rows = stmt.query_map(params![fetch_n as i64], file_stat_from_row)?;
+        let rows = stmt.query_map(params![limit], file_stat_from_row)?;
         let all: Vec<FileStat> = rows.collect::<rusqlite::Result<Vec<_>>>()?;
         if exclude_tests {
             Ok(all
@@ -666,52 +668,6 @@ impl Store {
     }
 }
 
-/// Return true when `path` looks like a test file by convention.
-/// Matches: test/ tests/ testdata/ __tests__/ spec/ fixtures/ directories,
-/// and file suffixes _test.rs _test.go .test.ts .test.js .spec.ts .spec.js Test.java _spec.rb.
-pub fn is_test_path(path: &str) -> bool {
-    let p = path.replace('\\', "/");
-    // Directory segments
-    for seg in [
-        "/test/",
-        "/tests/",
-        "/testdata/",
-        "/__tests__/",
-        "/spec/",
-        "/fixtures/",
-        "/mocks/",
-    ] {
-        if p.contains(seg) {
-            return true;
-        }
-    }
-    // Root-level test directories (no leading slash)
-    for prefix in ["test/", "tests/", "testdata/", "spec/", "fixtures/"] {
-        if p.starts_with(prefix) {
-            return true;
-        }
-    }
-    // File suffixes
-    for suffix in [
-        "_test.rs",
-        "_test.go",
-        "_test.py",
-        ".test.ts",
-        ".test.tsx",
-        ".test.js",
-        ".spec.ts",
-        ".spec.tsx",
-        ".spec.js",
-        "Test.java",
-        "_spec.rb",
-    ] {
-        if p.ends_with(suffix) {
-            return true;
-        }
-    }
-    false
-}
-
 fn file_stat_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<FileStat> {
     let lang_str: String = r.get(1)?;
     Ok(FileStat {
@@ -875,30 +831,44 @@ mod tests {
     }
 
     #[test]
-    fn test_is_test_path_detects_directories() {
-        assert!(is_test_path("tests/integration/auth.rs"));
-        assert!(is_test_path("src/tests/mod.rs"));
-        assert!(is_test_path("testdata/fixtures/sample.json"));
-        assert!(is_test_path("__tests__/handler.test.ts"));
-        assert!(is_test_path("spec/models/user_spec.rb"));
+    fn test_get_hotspots_excludes_test_files() {
+        let (store, _tmp) = open_temp();
+        let prod_id = store
+            .upsert_file("src/auth.rs", &LangId::Rust, 100)
+            .unwrap();
+        // test file scores higher but must be excluded when exclude_tests=true
+        let test_id = store
+            .upsert_file("tests/auth_test.rs", &LangId::Rust, 50)
+            .unwrap();
+        store
+            .upsert_git_stat(prod_id, 10, 5, None, None, 0.9)
+            .unwrap();
+        store
+            .upsert_git_stat(test_id, 20, 1, None, None, 0.99)
+            .unwrap();
+
+        let results = store.get_hotspots(5, true).unwrap();
+        assert_eq!(results.len(), 1, "test file must be filtered out");
+        assert_eq!(results[0].path, "src/auth.rs");
     }
 
     #[test]
-    fn test_is_test_path_detects_suffixes() {
-        assert!(is_test_path("src/auth/auth_test.rs"));
-        assert!(is_test_path("src/auth_test.go"));
-        assert!(is_test_path("src/handler.test.ts"));
-        assert!(is_test_path("src/handler.spec.js"));
-        assert!(is_test_path("src/AuthTest.java"));
-        assert!(is_test_path("src/user_spec.rb"));
-    }
+    fn test_get_hotspots_includes_test_files_when_not_excluded() {
+        let (store, _tmp) = open_temp();
+        let prod_id = store
+            .upsert_file("src/auth.rs", &LangId::Rust, 100)
+            .unwrap();
+        let test_id = store
+            .upsert_file("tests/auth_test.rs", &LangId::Rust, 50)
+            .unwrap();
+        store
+            .upsert_git_stat(prod_id, 10, 5, None, None, 0.9)
+            .unwrap();
+        store
+            .upsert_git_stat(test_id, 20, 1, None, None, 0.99)
+            .unwrap();
 
-    #[test]
-    fn test_is_test_path_passes_production_files() {
-        assert!(!is_test_path("src/auth.rs"));
-        assert!(!is_test_path("src/http/router.rs"));
-        assert!(!is_test_path("crates/bs-core/src/store.rs"));
-        assert!(!is_test_path("src/latest_context.ts"));
-        assert!(!is_test_path("src/protest.rs")); // "protest" contains "test" but is not a test
+        let results = store.get_hotspots(5, false).unwrap();
+        assert_eq!(results.len(), 2);
     }
 }
