@@ -7,7 +7,7 @@ All commands accept `-o json` and produce a response conforming to this schema.
 
 ```json
 {
-  "borescope": "0.4.1",
+  "borescope": "0.4.2",
   "schema": 1,
   "query": {
     "cmd": "paths|callers|diff|branch|map",

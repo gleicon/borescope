@@ -1,6 +1,6 @@
 # Borescope — Product & Technical Specification
 
-**Version:** 0.4.1
+**Version:** 0.4.2
 **Status:** Implemented (M0–M4 complete)
 **Target:** Single Rust binary + devskill package
 
