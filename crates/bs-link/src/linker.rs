@@ -59,12 +59,20 @@ pub fn link(store: &Store) -> Result<LinkStats> {
 
         let resolution = match same_lang_candidates {
             Some(ids) if ids.len() == 1 => Resolution::Unique(ids.clone(), 0.7),
-            Some(ids) => Resolution::Ambiguous(ids.clone(), 0.3),
+            Some(ids) => {
+                // Split confidence across N candidates: each gets at most 0.3 but
+                // drops as 1/N so high-fanout noise (e.g. .dispatch() ×30) approaches zero.
+                let conf = (1.0_f32 / ids.len() as f32).min(0.3);
+                Resolution::Ambiguous(ids.clone(), conf)
+            }
             None => {
                 // No same-lang match — try any-lang (possible cross-language call or stdlib shim)
                 match by_name.get(callee_name) {
                     Some(ids) if ids.len() == 1 => Resolution::Unique(ids.clone(), 0.5),
-                    Some(ids) => Resolution::Ambiguous(ids.clone(), 0.2),
+                    Some(ids) => {
+                        let conf = (1.0_f32 / ids.len() as f32).min(0.2);
+                        Resolution::Ambiguous(ids.clone(), conf)
+                    }
                     // No candidates → external (stdlib, OS, unindexed dep)
                     None => Resolution::External,
                 }

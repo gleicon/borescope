@@ -99,3 +99,114 @@ Pick the correct candidate and retry with the fully-qualified name.
 - New fields may be added at any time without a schema bump.
 - Fields will never be removed or renamed under schema 1.
 - A breaking change increments `"schema"` to 2; schema 1 responses will still have `"schema": 1`.
+
+---
+
+## SQLite database schema (power-user API)
+
+The index lives at `.borescope/index.db`. It is a valid SQLite 3 database you can query directly with any SQLite client. The schema below is stable across patch versions; columns may be added but existing ones are never renamed or dropped.
+
+```sql
+-- Source files in the repo
+files(
+  id            INTEGER PRIMARY KEY,
+  path          TEXT NOT NULL UNIQUE,   -- repo-root-relative path, forward slashes
+  lang          TEXT NOT NULL,          -- "rust" | "go" | "python" | "typescript" | ...
+  loc           INTEGER NOT NULL,       -- line count
+  file_hash     TEXT NOT NULL DEFAULT '' -- mtime:size fingerprint for incremental indexing
+)
+
+-- Git-derived metrics, one row per file
+git_stats(
+  file_id       INTEGER PRIMARY KEY REFERENCES files(id),
+  churn         INTEGER NOT NULL,        -- commit count touching this file
+  age_days      INTEGER NOT NULL,        -- days since last commit
+  last_commit_sha TEXT,
+  last_commit_ts  INTEGER,               -- Unix timestamp of last commit
+  hotspot       REAL NOT NULL            -- churn × exp(-λ × age_days), λ≈0.003
+)
+
+-- Co-change pairs (files that commit together)
+cochange(
+  file_a_id     INTEGER NOT NULL REFERENCES files(id),
+  file_b_id     INTEGER NOT NULL REFERENCES files(id),
+  support       INTEGER NOT NULL,        -- commits where both changed
+  strength      REAL NOT NULL,           -- P(b|a) — Jaccard-style
+  strength_rev  REAL NOT NULL,           -- P(a|b)
+  PRIMARY KEY (file_a_id, file_b_id),
+  CHECK (file_a_id < file_b_id)         -- canonical ordering, lo < hi
+)
+
+-- Symbols (functions, methods, types)
+symbols(
+  id            TEXT PRIMARY KEY,        -- stable hex hash of (file, name, kind)
+  kind          TEXT NOT NULL,           -- "function" | "method" | "type"
+  name          TEXT NOT NULL,           -- short name
+  qualified     TEXT NOT NULL,           -- "path/to/file.rs:FuncName"
+  file_id       INTEGER NOT NULL REFERENCES files(id),
+  span_start    INTEGER NOT NULL,        -- start line (1-based)
+  span_end      INTEGER NOT NULL,        -- end line (inclusive)
+  lang          TEXT NOT NULL,
+  churn         INTEGER NOT NULL,
+  age_days      INTEGER NOT NULL,
+  loc           INTEGER NOT NULL,
+  complexity    INTEGER NOT NULL,        -- cyclomatic complexity
+  hotspot       REAL NOT NULL,
+  patterns      TEXT NOT NULL DEFAULT '' -- JSON array, e.g. ["lock","await"]
+)
+
+-- Call graph edges
+edges(
+  from_id       TEXT NOT NULL,           -- symbol id, or "file:<path>", or "unresolved:<name>"
+  to_id         TEXT NOT NULL,           -- symbol id, or "external:<name>", or "import:<name>"
+  kind          TEXT NOT NULL,           -- "calls" | "contains" | "imports"
+  confidence    REAL NOT NULL,           -- 0.0..1.0; see confidence rubric above
+  meta          TEXT,                    -- reserved JSON blob
+  PRIMARY KEY (from_id, to_id, kind)
+)
+
+-- Bookkeeping
+meta(
+  key           TEXT PRIMARY KEY,
+  value         TEXT NOT NULL            -- includes "schema_version"
+)
+```
+
+### Useful queries
+
+```sql
+-- Fan-in: symbols with the most callers
+SELECT s.qualified, COUNT(*) AS fanin
+FROM edges e JOIN symbols s ON s.id = e.to_id
+WHERE e.kind = 'calls' AND e.confidence >= 0.7
+GROUP BY e.to_id ORDER BY fanin DESC LIMIT 20;
+
+-- Hottest production files (excluding test paths)
+SELECT f.path, g.hotspot, g.churn, g.age_days
+FROM files f JOIN git_stats g ON g.file_id = f.id
+WHERE f.path NOT LIKE '%/test%' AND f.path NOT LIKE '%_test.rs'
+ORDER BY g.hotspot DESC LIMIT 20;
+
+-- Symbols with lock+await (deadlock candidates)
+SELECT s.qualified, s.hotspot
+FROM symbols s
+WHERE s.patterns LIKE '%"lock"%' AND s.patterns LIKE '%"await"%'
+ORDER BY s.hotspot DESC;
+
+-- Folded stacks for a call tree rooted at a symbol (feed to inferno-flamegraph)
+-- Use borescope paths <sym> -o folded instead; this is the manual equivalent.
+WITH RECURSIVE tree(id, path, weight) AS (
+  SELECT id, name, hotspot FROM symbols WHERE qualified = 'src/http/router.rs:dispatch'
+  UNION ALL
+  SELECT s.id, tree.path || ';' || s.name, s.hotspot
+  FROM tree JOIN edges e ON e.from_id = tree.id
+            JOIN symbols s ON s.id = e.to_id
+  WHERE e.kind = 'calls' AND e.confidence >= 0.7
+)
+SELECT path, MAX(1, CAST(weight * 1000 AS INTEGER)) FROM tree
+WHERE id NOT IN (SELECT from_id FROM edges WHERE kind='calls');
+```
+
+### `edges.meta` field
+
+Currently unused by the CLI. Reserved for future structured metadata per edge (e.g. call-site line number, argument count). Treat as opaque JSON or NULL.

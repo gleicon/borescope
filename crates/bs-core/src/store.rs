@@ -193,6 +193,60 @@ impl Store {
 
     // ---------- files ----------
 
+    /// Remove every file (and its symbols, edges, git_stats, cochange pairs) whose path
+    /// is not present in `existing_paths`. Called after each index walk to evict deleted files.
+    pub fn purge_deleted_files(
+        &self,
+        existing_paths: &std::collections::HashSet<String>,
+    ) -> Result<usize> {
+        let all_paths: Vec<String> = {
+            let mut stmt = self.conn.prepare("SELECT path FROM files")?;
+            let rows = stmt.query_map([], |r| r.get(0))?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        let mut purged = 0;
+        for path in all_paths {
+            if !existing_paths.contains(&path) {
+                self.delete_file_cascade(&path)?;
+                purged += 1;
+            }
+        }
+        Ok(purged)
+    }
+
+    fn delete_file_cascade(&self, path: &str) -> Result<()> {
+        let file_id: Option<i64> = self
+            .conn
+            .query_row("SELECT id FROM files WHERE path=?1", params![path], |r| {
+                r.get(0)
+            })
+            .optional()?;
+        let fid = match file_id {
+            Some(id) => id,
+            None => return Ok(()),
+        };
+        // FK OFF in schema — delete in dependency order manually.
+        self.conn.execute(
+            "DELETE FROM edges WHERE from_id IN (SELECT id FROM symbols WHERE file_id=?1)",
+            params![fid],
+        )?;
+        self.conn.execute(
+            "DELETE FROM edges WHERE to_id IN (SELECT id FROM symbols WHERE file_id=?1)",
+            params![fid],
+        )?;
+        self.conn
+            .execute("DELETE FROM symbols WHERE file_id=?1", params![fid])?;
+        self.conn
+            .execute("DELETE FROM git_stats WHERE file_id=?1", params![fid])?;
+        self.conn.execute(
+            "DELETE FROM cochange WHERE file_a_id=?1 OR file_b_id=?1",
+            params![fid],
+        )?;
+        self.conn
+            .execute("DELETE FROM files WHERE id=?1", params![fid])?;
+        Ok(())
+    }
+
     pub fn get_file_hashes(&self) -> Result<std::collections::HashMap<String, String>> {
         let mut stmt = self
             .conn
@@ -870,5 +924,34 @@ mod tests {
 
         let results = store.get_hotspots(5, false).unwrap();
         assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_purge_deleted_files_removes_stale_entry() {
+        let (store, _tmp) = open_temp();
+        store.upsert_file("src/a.rs", &LangId::Rust, 10).unwrap();
+        store.upsert_file("src/b.rs", &LangId::Rust, 10).unwrap();
+
+        // Only src/a.rs still exists on disk
+        let existing: std::collections::HashSet<String> =
+            ["src/a.rs".to_string()].into_iter().collect();
+        let purged = store.purge_deleted_files(&existing).unwrap();
+
+        assert_eq!(purged, 1);
+        assert!(store.file_id("src/b.rs").unwrap().is_none());
+        assert!(store.file_id("src/a.rs").unwrap().is_some());
+    }
+
+    #[test]
+    fn test_purge_deleted_files_cascades_symbols_and_edges() {
+        let (store, _tmp) = open_temp();
+        store.upsert_file("src/a.rs", &LangId::Rust, 10).unwrap();
+        let sym = make_sym("sym1", "work", "src/a.rs");
+        store.upsert_symbol(&sym).unwrap();
+
+        let existing: std::collections::HashSet<String> = std::collections::HashSet::new();
+        store.purge_deleted_files(&existing).unwrap();
+
+        assert!(store.find_symbols_by_name("work").unwrap().is_empty());
     }
 }

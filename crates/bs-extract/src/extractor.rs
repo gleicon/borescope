@@ -59,6 +59,18 @@ pub fn extract_repo(
         .map(|e| e.into_path())
         .collect();
 
+    // Purge files that existed in the index but have since been deleted from disk.
+    let current_source_paths: std::collections::HashSet<String> = files
+        .iter()
+        .filter(|p| LangId::from_path(p).is_source())
+        .filter_map(|p| {
+            p.strip_prefix(repo_root)
+                .ok()
+                .map(|r| r.to_string_lossy().into_owned())
+        })
+        .collect();
+    let _ = store.purge_deleted_files(&current_source_paths);
+
     // Phase 1 — parse in parallel (CPU-bound, no DB access)
     let parsed: Vec<Result<Option<ParsedFile>>> = files
         .par_iter()
