@@ -203,7 +203,7 @@ File-level git stats are always available; span-level attribution (blame-based) 
 Edge {
   from: SymbolId
   to:   SymbolId
-  kind: calls | contains | imports | cochanges
+  kind: calls | contains | imports | cochanges | reference
   confidence: f32   // 0..1, see below
   meta: { count?: u32, support?: u32, via?: String }   // co-change stats, "via trait", etc.
 }
@@ -217,8 +217,13 @@ Edge {
 | Import-qualified, unique target | 0.9 |
 | Unique name match within imported modules | 0.7 |
 | Method name match on candidate types (multi-target) | 0.5 per edge |
-| Global name match, multiple candidates | 0.3 per edge |
+| Global name match, multiple candidates | min(0.3, 1/N) per edge |
 | Unresolvable (dynamic dispatch, metaprogramming) | edge to synthetic `<unresolved: name>` node, 0.1 |
+
+**Reference edges** (`kind: reference`): emitted when a function is passed as a value rather
+than called directly (callback to `spawn`, `map`, `filter`, `for_each`, etc.). Confidence ≤ 0.5.
+These edges make callbacks visible as callers so they don't appear as dead code; they are
+included by `paths`, `callers`, and fanin counts.
 
 **Co-change edges** (file↔file, lifted to symbol level where spans allow):
 
@@ -241,7 +246,7 @@ Binary name: `borescope`. All commands assume cwd is inside a git repo unless `-
 --zoom <level>         pkg | mod | fn | stmt   (default: fn)
 --weight <w>           none | loc | fanin | churn | hotspot | diff   (default: none;
                        diff commands default to `diff`)
---min-confidence <f>   hide edges below threshold (default: 0.0 = show all, styled)
+--min-confidence <f>   hide edges below threshold (default: 0.3; external:* edges always shown)
 -o, --output <fmt>     tree | folded | json | html   (default: tree; html writes a file
                        and prints its path)
 --no-color             plain ASCII tree
@@ -260,6 +265,9 @@ borescope paths <target> [flags]
     <target> forms:  path/to/file.go:FuncName
                      path/to/file.go:42            (line → enclosing symbol)
                      QualifiedName                 (unique match required, else list candidates and exit 3)
+    --analyze  appends a signals[] array. Signal kinds:
+               lock_await, blocking_async, unbounded_loop, high_complexity,
+               hot_symbol, cross_file_boundary, external_boundary, async_handoff
 
 borescope callers <target> [flags] [--coupled]
     Reverse slice. --coupled appends the co-change section (on by default in json).
