@@ -156,6 +156,9 @@ pub enum EdgeKind {
     Contains,
     Imports,
     Cochanges,
+    /// Function passed as a value (callback, closure capture, higher-order arg).
+    /// Lower confidence than Calls; shows callbacks that static call graphs normally miss.
+    Reference,
 }
 
 impl std::fmt::Display for EdgeKind {
@@ -165,6 +168,7 @@ impl std::fmt::Display for EdgeKind {
             Self::Contains => "contains",
             Self::Imports => "imports",
             Self::Cochanges => "cochanges",
+            Self::Reference => "reference",
         };
         write!(f, "{s}")
     }
@@ -178,6 +182,7 @@ impl std::str::FromStr for EdgeKind {
             "contains" => Ok(Self::Contains),
             "imports" => Ok(Self::Imports),
             "cochanges" => Ok(Self::Cochanges),
+            "reference" => Ok(Self::Reference),
             other => Err(format!("unknown edge kind: {other}")),
         }
     }

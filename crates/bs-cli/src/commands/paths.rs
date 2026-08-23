@@ -363,8 +363,24 @@ fn analyze_symbols(syms: &[Symbol], store: &Store) -> Vec<Signal> {
         }
     }
 
-    // External boundary signal for the last symbol on the path
+    // Signals for the last symbol on the path
     if let Some(last) = syms.last() {
+        let has_spawn = last.patterns.contains(&"spawn".to_string());
+        let has_chan = last.patterns.contains(&"chan".to_string());
+        if has_spawn || has_chan {
+            let mechanism = if has_spawn { "task spawn" } else { "channel send" };
+            signals.push(Signal {
+                kind: "async_handoff".into(),
+                severity: "info".into(),
+                detail: format!(
+                    "path terminates at `{}` which performs a {} — the consumer \
+                     runs asynchronously; trace `borescope paths <consumer>` to \
+                     follow the continuation",
+                    last.name, mechanism
+                ),
+            });
+        }
+
         if let Ok(externals) = store.get_external_callees(&last.id) {
             if !externals.is_empty() {
                 signals.push(Signal {

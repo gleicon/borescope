@@ -546,7 +546,7 @@ impl Store {
              FROM edges e
              JOIN symbols s ON s.id=e.to_id
              JOIN files f ON f.id=s.file_id
-             WHERE e.from_id=?1 AND e.kind='calls' AND e.confidence>=?2",
+             WHERE e.from_id=?1 AND e.kind IN ('calls','reference') AND e.confidence>=?2",
         )?;
         let rows = stmt.query_map(params![symbol_id, min_conf], |r| {
             let sym = symbol_from_row_n(r, 0)?;
@@ -563,7 +563,7 @@ impl Store {
              FROM edges e
              JOIN symbols s ON s.id=e.from_id
              JOIN files f ON f.id=s.file_id
-             WHERE e.to_id=?1 AND e.kind='calls' AND e.confidence>=?2",
+             WHERE e.to_id=?1 AND e.kind IN ('calls','reference') AND e.confidence>=?2",
         )?;
         let rows = stmt.query_map(params![symbol_id, min_conf], |r| {
             let sym = symbol_from_row_n(r, 0)?;
@@ -638,13 +638,13 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
-    /// Returns (fanin, fanout) per symbol id for all `calls` edges.
+    /// Returns (fanin, fanout) per symbol id for all `calls` and `reference` edges.
     pub fn get_call_edge_counts(&self) -> Result<std::collections::HashMap<String, (u32, u32)>> {
         let mut counts: std::collections::HashMap<String, (u32, u32)> =
             std::collections::HashMap::new();
         let mut stmt = self
             .conn
-            .prepare("SELECT from_id, to_id FROM edges WHERE kind='calls'")?;
+            .prepare("SELECT from_id, to_id FROM edges WHERE kind IN ('calls','reference')")?;
         let rows = stmt.query_map([], |r| {
             let from: String = r.get(0)?;
             let to: String = r.get(1)?;

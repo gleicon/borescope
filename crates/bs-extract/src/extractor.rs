@@ -2,6 +2,7 @@ use crate::{
     language::lang_config,
     queries::{
         DEF_FUNCTION, DEF_METHOD, DEF_TYPE, IMPORT, PATTERN_PREFIX, REF_CALL, REF_CALL_RECEIVER,
+        REF_ITEM,
     },
 };
 use bs_core::{EdgeKind, LangId, Result, Store, Symbol, SymbolKind};
@@ -29,6 +30,7 @@ struct ParsedFile {
     loc: u32,
     defs: Vec<RawDef>,
     calls: Vec<RawCall>,
+    refs: Vec<RawRef>,
     imports: Vec<String>,
     patterns: Vec<RawPattern>,
     file_hash: String,
@@ -177,6 +179,7 @@ fn parse_file(
                 loc: 0,
                 defs: vec![],
                 calls: vec![],
+                refs: vec![],
                 imports: vec![],
                 patterns: vec![],
                 file_hash: String::new(),
@@ -201,6 +204,7 @@ fn parse_file(
                 loc,
                 defs: vec![],
                 calls: vec![],
+                refs: vec![],
                 imports: vec![],
                 patterns: vec![],
                 file_hash: String::new(),
@@ -224,6 +228,7 @@ fn parse_file(
 
     let mut defs: Vec<RawDef> = Vec::new();
     let mut calls: Vec<RawCall> = Vec::new();
+    let mut refs: Vec<RawRef> = Vec::new();
     let mut imports: Vec<String> = Vec::new();
     let mut patterns: Vec<RawPattern> = Vec::new();
 
@@ -263,6 +268,11 @@ fn parse_file(
                 if let Some(last) = calls.last_mut() {
                     last.receiver = Some(text);
                 }
+            } else if cap_name == REF_ITEM {
+                refs.push(RawRef {
+                    name: text,
+                    line: start_line,
+                });
             } else if cap_name == IMPORT {
                 imports.push(text);
             } else if let Some(stripped) = cap_name.strip_prefix(PATTERN_PREFIX) {
@@ -281,6 +291,7 @@ fn parse_file(
         loc,
         defs,
         calls,
+        refs,
         imports,
         patterns,
         file_hash: String::new(), // set by caller after fingerprinting
@@ -356,6 +367,16 @@ fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
             let enc_id = stable_id(&pf.rel_path, &enc.name, &enc.kind);
             store
                 .upsert_edge(&enc_id, &callee_id, &EdgeKind::Calls, 0.3, None)
+                .ok();
+        }
+    }
+
+    for r in &pf.refs {
+        let target_id = format!("unresolved:{}", r.name);
+        if let Some(enc) = enclosing_def(&pf.defs, r.line) {
+            let enc_id = stable_id(&pf.rel_path, &enc.name, &enc.kind);
+            store
+                .upsert_edge(&enc_id, &target_id, &EdgeKind::Reference, 0.5, None)
                 .ok();
         }
     }
@@ -468,6 +489,12 @@ struct RawDef {
 struct RawCall {
     callee: String,
     receiver: Option<String>,
+    line: u32,
+}
+
+#[derive(Debug)]
+struct RawRef {
+    name: String,
     line: u32,
 }
 

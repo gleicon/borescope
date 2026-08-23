@@ -39,7 +39,7 @@ borescope paths <entry> --to <target> --weight hotspot --analyze
 ```
 `--analyze` emits a `signals` array with `kind`, `severity`, `detail` — cite `detail` directly in
 your explanation. Signals: `lock_await`, `blocking_async`, `hot_symbol`, `high_complexity`,
-`path_depth`, `cross_file_boundary`, `external_boundary`.
+`path_depth`, `cross_file_boundary`, `external_boundary`, `async_handoff`, `unbounded_loop`.
 
 **After modifying** — show what changed and blast radius:
 ```bash

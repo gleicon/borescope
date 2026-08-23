@@ -27,8 +27,8 @@ struct Cli {
     #[arg(long, global = true, default_value = "none")]
     weight: bs_render::Weight,
 
-    /// Hide edges below confidence threshold
-    #[arg(long, global = true, default_value = "0.0")]
+    /// Hide edges below confidence threshold (external:* edges are always shown)
+    #[arg(long, global = true, default_value = "0.3")]
     min_confidence: f32,
 
     /// Output format: tree | folded | json | html | tui | mermaid | dot

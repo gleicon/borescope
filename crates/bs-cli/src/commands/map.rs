@@ -22,6 +22,16 @@ pub fn run(ctx: &Context, args: &MapArgs) -> Result<()> {
             .fold(0.0f32, f32::max);
         let max_loc = all_syms.iter().map(|s| s.loc as f32).fold(0.0f32, f32::max);
 
+        let fanin_counts = if ctx.weight == Weight::Fanin {
+            store.get_call_edge_counts()?
+        } else {
+            HashMap::new()
+        };
+        let max_fanin = fanin_counts
+            .values()
+            .map(|(fanin, _)| *fanin as f32)
+            .fold(0.0f32, f32::max);
+
         let mut by_file: HashMap<String, Vec<&bs_core::Symbol>> = HashMap::new();
         for sym in &all_syms {
             by_file
@@ -47,7 +57,12 @@ pub fn run(ctx: &Context, args: &MapArgs) -> Result<()> {
                             file.clone(),
                             sym.span,
                         );
-                        n.weight = ctx.weight.score_symbol(sym, max_churn, max_loc);
+                        n.weight = if ctx.weight == Weight::Fanin {
+                            let fanin = fanin_counts.get(&sym.id).map(|(fi, _)| *fi).unwrap_or(0);
+                            fanin as f32 / max_fanin.max(1.0)
+                        } else {
+                            ctx.weight.score_symbol(sym, max_churn, max_loc)
+                        };
                         n
                     })
                     .collect();

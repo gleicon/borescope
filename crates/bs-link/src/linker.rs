@@ -28,12 +28,12 @@ pub fn link(store: &Store) -> Result<LinkStats> {
         symbol_lang.insert(sym.id.clone(), sym.lang.to_string());
     }
 
-    // Resolve unresolved: edges (from_id, "unresolved:<name>") -> real edges
-    let unresolved: Vec<(String, String)> = {
+    // Resolve unresolved: edges (from_id, "unresolved:<name>", kind) -> real edges
+    let unresolved: Vec<(String, String, String)> = {
         let mut stmt = store
             .conn
-            .prepare("SELECT from_id, to_id FROM edges WHERE to_id LIKE 'unresolved:%'")?;
-        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+            .prepare("SELECT from_id, to_id, kind FROM edges WHERE to_id LIKE 'unresolved:%'")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()?
     };
 
@@ -41,8 +41,9 @@ pub fn link(store: &Store) -> Result<LinkStats> {
     let mut left_unresolved = 0usize;
     let mut external = 0usize;
 
-    for (from_id, unresolved_to) in &unresolved {
+    for (from_id, unresolved_to, edge_kind_str) in &unresolved {
         let callee_name = unresolved_to.trim_start_matches("unresolved:");
+        let edge_kind: EdgeKind = edge_kind_str.parse().unwrap_or(EdgeKind::Calls);
 
         // Look for same-language candidates first
         let caller_lang = symbol_lang
@@ -82,7 +83,7 @@ pub fn link(store: &Store) -> Result<LinkStats> {
         match resolution {
             Resolution::Unique(ids, conf) => {
                 for id in &ids {
-                    store.upsert_edge(from_id, id, &EdgeKind::Calls, conf, None)?;
+                    store.upsert_edge(from_id, id, &edge_kind, conf, None)?;
                 }
                 store.conn.execute(
                     "DELETE FROM edges WHERE from_id=?1 AND to_id=?2",
@@ -92,7 +93,7 @@ pub fn link(store: &Store) -> Result<LinkStats> {
             }
             Resolution::Ambiguous(ids, conf) => {
                 for id in &ids {
-                    store.upsert_edge(from_id, id, &EdgeKind::Calls, conf, None)?;
+                    store.upsert_edge(from_id, id, &edge_kind, conf, None)?;
                 }
                 store.conn.execute(
                     "DELETE FROM edges WHERE from_id=?1 AND to_id=?2",
@@ -101,7 +102,6 @@ pub fn link(store: &Store) -> Result<LinkStats> {
                 left_unresolved += 1;
             }
             Resolution::External => {
-                // Mark as external rather than leaving as unresolved
                 let external_id = format!("external:{}", callee_name);
                 store.upsert_edge(from_id, &external_id, &EdgeKind::Calls, 0.0, None)?;
                 store.conn.execute(
@@ -226,6 +226,43 @@ mod tests {
         assert_eq!(stats.external, 1);
         assert_eq!(stats.resolved, 0);
         assert!(edge_conf(&store, "a", "external:stdlib_func").is_some());
+    }
+
+    fn reference_edge(store: &Store, from: &str, callee_name: &str) {
+        store
+            .upsert_edge(
+                from,
+                &format!("unresolved:{}", callee_name),
+                &EdgeKind::Reference,
+                0.5,
+                None,
+            )
+            .unwrap();
+    }
+
+    fn edge_kind(store: &Store, from: &str, to: &str) -> Option<String> {
+        let mut stmt = store
+            .conn
+            .prepare("SELECT kind FROM edges WHERE from_id=?1 AND to_id=?2")
+            .unwrap();
+        stmt.query_row(rusqlite::params![from, to], |r| r.get(0))
+            .ok()
+    }
+
+    #[test]
+    fn reference_edge_preserves_kind_after_resolution() {
+        let (_dir, store) = open_store();
+        let a = sym("a", "dispatcher", LangId::Rust);
+        let b = sym("b", "handle_request", LangId::Rust);
+        insert_sym(&store, &a);
+        insert_sym(&store, &b);
+        reference_edge(&store, "a", "handle_request");
+
+        let stats = link(&store).unwrap();
+        assert_eq!(stats.resolved, 1);
+        assert_eq!(edge_kind(&store, "a", "b").as_deref(), Some("reference"));
+        let conf = edge_conf(&store, "a", "b").unwrap();
+        assert!((conf - 0.7).abs() < 0.01, "expected 0.7 for unique same-lang, got {conf}");
     }
 
     #[test]

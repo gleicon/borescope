@@ -65,7 +65,27 @@
     name: (identifier) @pattern.spawn)
   (#match? @pattern.spawn "^(spawn|spawn_blocking|spawn_local)$"))
 
+; Channel send — async handoff boundary
+(call_expression
+  function: (field_expression
+    field: (field_identifier) @pattern.chan)
+  (#match? @pattern.chan "^(send|try_send|blocking_send)$"))
+
 ; Loop constructs
 (loop_expression) @pattern.loop
 (while_expression) @pattern.loop
 (for_expression) @pattern.loop
+
+; Function references passed as values to spawn
+(call_expression
+  function: (scoped_identifier
+    name: (identifier) @_spawn_fn
+    (#match? @_spawn_fn "^(spawn|spawn_blocking|spawn_local)$"))
+  arguments: (arguments (identifier) @ref.item))
+
+; Function references in higher-order function calls
+(call_expression
+  function: (field_expression
+    field: (field_identifier) @_hof
+    (#match? @_hof "^(map|filter|for_each|flat_map|and_then|or_else|filter_map|find|any|all)$"))
+  arguments: (arguments (identifier) @ref.item))

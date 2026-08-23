@@ -4,6 +4,7 @@ pub const DEF_METHOD: &str = "def.method";
 pub const DEF_TYPE: &str = "def.type";
 pub const REF_CALL: &str = "ref.call";
 pub const REF_CALL_RECEIVER: &str = "ref.call.receiver";
+pub const REF_ITEM: &str = "ref.item";
 pub const IMPORT: &str = "import";
 
 // Semantic pattern captures — prefix "pattern." (individual consts used as documentation)

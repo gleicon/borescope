@@ -159,11 +159,18 @@ symbols(
 edges(
   from_id       TEXT NOT NULL,           -- symbol id, or "file:<path>", or "unresolved:<name>"
   to_id         TEXT NOT NULL,           -- symbol id, or "external:<name>", or "import:<name>"
-  kind          TEXT NOT NULL,           -- "calls" | "contains" | "imports"
+  kind          TEXT NOT NULL,           -- "calls" | "contains" | "imports" | "reference"
   confidence    REAL NOT NULL,           -- 0.0..1.0; see confidence rubric above
   meta          TEXT,                    -- reserved JSON blob
   PRIMARY KEY (from_id, to_id, kind)
 )
+-- kind values:
+--   "calls"     — direct call expression (foo(), self.bar(), Mod::baz())
+--   "contains"  — file contains symbol (file:<path> → symbol id)
+--   "imports"   — use/import declaration (file → import:<name>)
+--   "reference" — function passed as a value (callback, higher-order arg, spawn argument)
+--                 confidence ≤ 0.5; lower than calls because static analysis cannot confirm
+--                 the function is ever actually invoked
 
 -- Bookkeeping
 meta(
