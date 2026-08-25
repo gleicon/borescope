@@ -87,14 +87,33 @@ The repo-local file fully replaces the built-in query for that language. To exte
 
 ## `--analyze` flag
 
-`borescope paths <target> --analyze` emits a structured signal array instead of a tree:
+`borescope paths <target> --analyze` appends a `signals` array describing structural and concurrency risks on the call path:
 
 ```json
 [
-  { "kind": "complexity", "severity": "high",   "detail": "complexity=18, threshold=10" },
-  { "kind": "lock_across_await", "severity": "critical", "detail": "holds lock across .await" },
-  { "kind": "fanin", "severity": "medium", "detail": "called by 12 symbols — high blast radius" }
+  { "kind": "high_complexity",     "severity": "medium", "detail": "`dispatch` at src/router.rs:42 has cyclomatic complexity 18 — ..." },
+  { "kind": "lock_await",          "severity": "high",   "detail": "`acquire` at src/lock.rs:11 holds a lock while awaiting — deadlock risk ..." },
+  { "kind": "blocking_async",      "severity": "high",   "detail": "`sync_wrapper` at src/compat.rs:7 calls block_on() — risks thread starvation ..." },
+  { "kind": "unbounded_loop",      "severity": "medium", "detail": "`process` at src/worker.rs:33 contains a loop — verify iteration bound ..." },
+  { "kind": "hot_symbol",          "severity": "medium", "detail": "`handler` at src/api.rs:5 is a hotspot (score 0.91) — frequently changed ..." },
+  { "kind": "cross_file_boundary", "severity": "info",   "detail": "path crosses 3 files: api.rs → auth.rs → db.rs" },
+  { "kind": "external_boundary",   "severity": "info",   "detail": "path terminates at external calls not in the indexed codebase: reqwest::get ..." },
+  { "kind": "async_handoff",       "severity": "info",   "detail": "path terminates at `enqueue` which performs a channel send — the consumer runs asynchronously ..." }
 ]
 ```
 
-Designed for LLM consumption: machine-readable, plain-English `detail`, no tree traversal required.
+Signal kinds:
+
+| Kind | Severity | Condition |
+|---|---|---|
+| `lock_await` | high | symbol holds a lock while awaiting — deadlock risk |
+| `blocking_async` | high | `block_on()` inside an async context — thread starvation risk |
+| `unbounded_loop` | medium | loop construct on the call path |
+| `high_complexity` | medium | cyclomatic complexity > 10 |
+| `hot_symbol` | medium | hotspot score > 0.7 |
+| `path_depth` | info | path depth ≥ 5 |
+| `cross_file_boundary` | info | path crosses multiple files |
+| `external_boundary` | info | path ends at an unindexed callee (stdlib, OS, dep) |
+| `async_handoff` | info | path ends at `spawn` or channel send — continuation is async |
+
+Designed for LLM consumption: machine-readable, plain-English `detail`, cite `detail` directly in explanations without tree traversal.

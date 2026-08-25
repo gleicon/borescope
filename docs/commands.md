@@ -29,7 +29,7 @@ borescope index --git &     # Phase 2: background — git signals ready when don
 borescope paths <target> [--to <target>] [--analyze]
 ```
 
-Everything statically reachable from `target`. With `--to`, returns the shortest BFS path between two symbols. With `--analyze`, emits a structured signal array suitable for LLM consumption.
+Everything statically reachable from `target`. With `--to`, returns the shortest BFS path between two symbols. With `--analyze`, appends a `signals[]` array for LLM consumption. Signal kinds: `lock_await`, `blocking_async`, `unbounded_loop`, `high_complexity`, `hot_symbol`, `path_depth`, `cross_file_boundary`, `external_boundary`, `async_handoff`. See [`docs/patterns.md`](patterns.md#--analyze-flag) for full details.
 
 ![borescope paths --to --weight hotspot](../docs/screenshots/borescope-paths-to.gif)
 
@@ -144,7 +144,7 @@ Antipattern + semantic pattern report. `--recommend` adds `cargo audit` / `semgr
 --zoom pkg|mod|fn     Aggregation level (default: fn)
 --weight none|loc|fanin|churn|hotspot|diff
 -o tree|folded|json|html|tui
---min-confidence F    Hide edges below this confidence (default: 0.0)
+--min-confidence F    Hide edges below this confidence (default: 0.3; external:* always shown)
 --no-color            Plain ASCII — no ANSI colour
 -q / --quiet          Suppress progress output
 -v / --verbose        Extra detail (e.g., linker resolution stats)

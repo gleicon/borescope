@@ -87,7 +87,7 @@ NFR-10: Precision — on Tier 1 languages, confidence-≥0.7 call edges SHALL ac
 
 **CLI commands (entry points):**
 - `borescope index` — build or update `.borescope/`
-- `borescope paths <target>` — forward slice
+- `borescope paths <target>` — forward slice; `--analyze` appends signals array
 - `borescope callers <target>` — reverse slice
 - `borescope diff [rev1 [rev2]]` — call-tree diff
 - `borescope branch <name>` — sugar for diff from merge-base
@@ -96,6 +96,9 @@ NFR-10: Precision — on Tier 1 languages, confidence-≥0.7 call edges SHALL ac
 - `borescope coupled <target>` — co-change partners
 - `borescope age` — code-age view
 - `borescope smells` — antipattern report
+- `borescope explain <target>` — plain-English risk profile for a symbol
+- `borescope explain-pr <branch>` — PR impact: risk, blast radius, co-change warnings
+- `borescope skill` — print embedded skill file to stdout (for Claude Code, Cursor, agents)
 
 **Output formats at boundaries:**
 - `tree` — ANSI to stdout, `--no-color` for plain ASCII
