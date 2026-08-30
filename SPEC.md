@@ -10,7 +10,7 @@ AI-generated code produces diffs too large to review line-by-line. Reviewers and
 - Static symbol/call graph indexed from source via tree-sitter, zero config, no build step
 - Forward slice (paths), reverse slice (callers), diff slice (diff/branch), overview (map)
 - Git history signals: churn, code age, hotspot score, co-change coupling
-- Four output formats: ANSI tree, Brendan Gregg folded, JSON (stable agent contract), self-contained HTML
+- Six output formats: ANSI tree, Brendan Gregg folded, JSON (stable agent contract), self-contained HTML, Mermaid diagram, Graphviz DOT
 - Confidence scoring on every cross-file edge
 - Single offline static binary + devskill package
 
@@ -45,7 +45,7 @@ FR-6: The system SHALL mine git history to compute per-symbol churn, code age, h
 
 FR-7: The system SHALL annotate every cross-file call edge with a confidence score between 0.0 and 1.0 and distinguish certain from possible edges in all renderers.
 
-FR-8: The system SHALL support output formats: ANSI tree (default), Brendan Gregg folded (pipeable to `inferno-flamegraph`), JSON (stable contract), and self-contained HTML.
+FR-8: The system SHALL support output formats: ANSI tree (default), Brendan Gregg folded (pipeable to `inferno-flamegraph`), JSON (stable contract), self-contained HTML, Mermaid diagram, and Graphviz DOT.
 
 FR-9: The system SHALL perform incremental indexing — on any command, reparse and relink only files changed since the last index, not the entire repository.
 
@@ -99,12 +99,15 @@ NFR-10: Precision — on Tier 1 languages, confidence-≥0.7 call edges SHALL ac
 - `borescope explain <target>` — plain-English risk profile for a symbol
 - `borescope explain-pr <branch>` — PR impact: risk, blast radius, co-change warnings
 - `borescope skill` — print embedded skill file to stdout (for Claude Code, Cursor, agents)
+- `borescope memo [--update] [--who <path>]` — per-project team memory: decisions, danger zones, recent activity worklog
 
 **Output formats at boundaries:**
 - `tree` — ANSI to stdout, `--no-color` for plain ASCII
 - `folded` — Brendan Gregg one-line-per-path to stdout; integer weights ×1000
 - `json` — versioned (`"schema": 1`) to stdout; additive-only evolution; unknown fields ignored
 - `html` — self-contained file written to disk; path printed to stdout
+- `mermaid` — fenced Mermaid block; `--no-fence` for raw output; renders in GitHub, Claude Code, Cursor
+- `dot` — fenced Graphviz DOT block; `--no-fence` to pipe to `dot -Tpng`
 
 **External systems:**
 - `git` CLI (shells out; no libgit2 dependency): `log --numstat`, `diff --name-only`, `merge-base`, `cat-file`

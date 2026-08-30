@@ -7,7 +7,7 @@ All commands accept `-o json` and produce a response conforming to this schema.
 
 ```json
 {
-  "borescope": "0.4.2",
+  "borescope": "0.4.3",
   "schema": 1,
   "query": {
     "cmd": "paths|callers|diff|branch|map",
@@ -72,7 +72,7 @@ All commands accept `-o json` and produce a response conforming to this schema.
 | Import-qualified, unique target | 0.9 |
 | Unique name match within imported modules | 0.7 |
 | Method name match on candidate types (multi-target) | 0.5 per edge |
-| Global name match, multiple candidates | 0.3 per edge |
+| Global name match, multiple candidates | min(0.3, 1/N) per edge |
 | Unresolvable (dynamic dispatch, metaprogramming) | 0.1 |
 
 ## Exit codes

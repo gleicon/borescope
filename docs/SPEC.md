@@ -1,6 +1,6 @@
 # Borescope — Product & Technical Specification
 
-**Version:** 0.4.2
+**Version:** 0.4.3
 **Status:** Implemented (M0–M4 complete)
 **Target:** Single Rust binary + devskill package
 
@@ -191,7 +191,7 @@ Symbol {
   age_days:    u32               // days since last change to span
   loc:         u32
   complexity:  u32               // cheap proxy: max nesting depth × branch-node count (language-generic from AST)
-  hotspot:     f32               // normalized churn × complexity, 0..1
+  hotspot:     f32               // churn × exp(-λ × age_days), λ≈0.003; 1.0 = changed constantly and very recently
 }
 ```
 
@@ -247,8 +247,9 @@ Binary name: `borescope`. All commands assume cwd is inside a git repo unless `-
 --weight <w>           none | loc | fanin | churn | hotspot | diff   (default: none;
                        diff commands default to `diff`)
 --min-confidence <f>   hide edges below threshold (default: 0.3; external:* edges always shown)
--o, --output <fmt>     tree | folded | json | html   (default: tree; html writes a file
-                       and prints its path)
+-o, --output <fmt>     tree | folded | json | html | mermaid | dot   (default: tree)
+                       mermaid/dot: fenced code block by default; --no-fence for raw output
+--no-fence             strip fenced code block wrapper (mermaid/dot only, for piping)
 --no-color             plain ASCII tree
 -q / -v                quiet / verbose
 ```
@@ -283,8 +284,9 @@ borescope branch <name> [--base <rev>]
 borescope map [--zoom pkg|mod] [flags]
     Repo overview: containment tree weighted by chosen metric.
 
-borescope hotspots [--top <n>]
-    Ranked churn × complexity table.
+borescope hotspots [--top <n>] [--include-tests]
+    Files ranked by hotspot = churn × recency (exponential decay, 230-day half-life).
+    Test files hidden by default; --include-tests to show them.
 
 borescope coupled <file|target> [--min <strength>] [--support <n>]
     Co-change partners of a file or symbol.
@@ -292,15 +294,33 @@ borescope coupled <file|target> [--min <strength>] [--support <n>]
 borescope age [--zoom pkg|mod|fn]
     Code-age view (containment tree, weight = staleness).
 
-borescope smells
+borescope smells [--recommend]
     Antipattern report:
       shotgun-surgery : symbol/file with ≥ 4 co-change partners at strength ≥ 0.5
       god-file        : file > p95 loc AND > p95 fan-in
       stale-core      : age > 2y AND fan-in > p90 (old code everything depends on)
       tangled-pair    : A↔B strength ≥ 0.8 with no import/call edge between them
+    --recommend  appends cargo audit / semgrep suggestions for security-sensitive co-change pairs.
 
-borescope query <sexp|json>       (v1.1, reserved)
-    Raw graph query escape hatch for agents.
+borescope explain <target>
+    Plain-English risk profile: heat rating, complexity, fanin/fanout, concurrency patterns,
+    co-change partners, risk verdict (LOW / MEDIUM / HIGH RISK).
+
+borescope explain-pr <branch> [--base <rev>]
+    PR impact analysis: changed files, high-risk symbols, co-change warnings (missing files),
+    semantic patterns in touched code, bottom-line verdict.
+
+borescope skill
+    Print the embedded SKILL.md to stdout. Works outside a git repository.
+    Redirect to install on Claude Code, Cursor, or any agent platform.
+
+borescope memo [--update] [--who <path>] [--days N]
+    Per-project team memory. Two-file split in .borescope/:
+      memo.toml    — committed, human-curated (decisions, danger zones, notes)
+      worklog.toml — gitignored, auto-generated from git history
+    --update  mines git history and writes/refreshes worklog.toml
+    --who     show recent authors for a file or directory prefix
+    --days    history window in days (default: 90)
 ```
 
 ### Exit codes
@@ -317,7 +337,11 @@ borescope query <sexp|json>       (v1.1, reserved)
 ```
 .borescope/
 ├── index.db        # SQLite: symbols, edges, files, git_stats, cochange, meta
+├── memo.toml       # (optional) committed team memory: decisions, danger zones, notes
+├── worklog.toml    # (optional) gitignored, auto-generated recent activity
 ├── queries/        # (optional) user query-pack overrides
+├── smells.toml     # (optional) custom smell rules
+├── thresholds.toml # (optional) risk threshold overrides
 └── VERSION
 ```
 
