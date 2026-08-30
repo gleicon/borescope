@@ -365,6 +365,67 @@ Or use the installer script:
 
 ---
 
+## 16. Team onboarding — first day on an unfamiliar codebase
+
+```bash
+cd some-repo
+
+# Step 1: read what the team wrote down
+borescope memo                       # project decisions, danger zones, recent work
+borescope memo --who src/payments    # who knows this area?
+
+# Step 2: build the index and explore structure
+borescope index --no-git             # fast — structural queries ready immediately
+borescope index --git &              # background — adds history signals
+borescope hotspots --top 15
+borescope map --weight hotspot -o tui
+
+# Step 3: understand one symbol before touching it
+borescope explain src/payments/processor.rs:charge
+borescope callers src/payments/processor.rs:charge --depth 3
+```
+
+`borescope memo` surfaces decisions made before you arrived: danger zones, architecture rationale, who to ask. Saves the first-week "why does this work this way?" conversations.
+
+---
+
+## 17. Keep the team worklog fresh
+
+```bash
+borescope memo --update              # regenerate from the last 90 days
+borescope memo --update --days 180   # wider window for onboarding
+
+borescope memo --who src/auth        # who has context here?
+borescope memo                       # decisions + recent 20 commits
+```
+
+`worklog.toml` is auto-generated — never edit it. `memo.toml` is where decisions and notes live. Both sit in `.borescope/`. Gitignore pattern to commit only `memo.toml`:
+
+```
+.borescope/*
+!.borescope/memo.toml
+```
+
+---
+
+## 18. Agent cold-start with project context
+
+Before touching source files, agents should orient with project memory:
+
+```bash
+borescope memo                          # read decisions and recent work first
+borescope index --no-git                # build index
+borescope explain <target>              # understand the symbol
+borescope callers <target> -o json      # find all callers
+borescope paths <target> --analyze      # signal array for reasoning
+# ... work ...
+borescope memo --update                 # refresh worklog after the session
+```
+
+The skill file (`borescope skill`) embeds this workflow. Agents following the skill do this automatically.
+
+---
+
 ## TUI keybindings
 
 | Key | Action |

@@ -7,6 +7,15 @@ Use it before reading source files — it is faster and dramatically token-cheap
 
 ## Setup
 
+### Read project memory first
+
+```bash
+borescope memo              # project decisions, danger zones, who worked where
+borescope memo --who <dir>  # find who has context on a specific area
+```
+
+Run this before indexing when working in an unfamiliar repo or area. `memo` reads `.borescope/memo.toml` (team-committed decisions) and `.borescope/worklog.toml` (auto-generated recent activity). If `worklog.toml` is missing, run `borescope memo --update` to generate it.
+
 ### One-time index (run once per repo, re-run after large merges)
 
 ```bash
@@ -114,6 +123,8 @@ to Mermaid for dense call graphs. Neither format requires a runtime dependency.
 - Read source files only for frames in the call tree you will actually change.
 - `borescope explain <symbol>` gives you complexity, fanin, hotspot, patterns, and co-change
   partners in ~300 tokens — faster than reading the file.
+- `borescope memo` gives architectural context in ~200 tokens — read it before asking questions
+  that the team already answered in `memo.toml`.
 
 ---
 

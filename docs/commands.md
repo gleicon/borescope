@@ -143,9 +143,10 @@ Antipattern + semantic pattern report. `--recommend` adds `cargo audit` / `semgr
 --depth N             Max tree depth (default: 3)
 --zoom pkg|mod|fn     Aggregation level (default: fn)
 --weight none|loc|fanin|churn|hotspot|diff
--o tree|folded|json|html|tui
+-o tree|folded|json|html|tui|mermaid|dot
 --min-confidence F    Hide edges below this confidence (default: 0.3; external:* always shown)
 --no-color            Plain ASCII — no ANSI colour
+--no-fence            Strip fenced code block wrapper (mermaid/dot only, for piping)
 -q / --quiet          Suppress progress output
 -v / --verbose        Extra detail (e.g., linker resolution stats)
 ```
@@ -192,6 +193,59 @@ borescope skill > /tmp/borescope-skill.md
 | Flag | Description |
 |---|---|
 | `--raw` | (no-op — output is always raw Markdown; kept for scripting clarity) |
+
+---
+
+## memo — per-project memory
+
+```bash
+borescope memo [--update] [--who <path>] [--days N]
+```
+
+Two-file team memory in `.borescope/`:
+
+- **`memo.toml`** — committed to the repo. Human-curated: project description, entry points, danger zones, architectural decisions, team notes.
+- **`worklog.toml`** — gitignored, auto-generated. Recent commit subjects grouped by files touched (source files only, excludes mass-change commits >50 files).
+
+| Flag | Default | Description |
+|---|---|---|
+| `--update` | — | Mine git history and write/refresh `.borescope/worklog.toml` |
+| `--who <path>` | — | Recent authors + commit subjects for a path prefix |
+| `--days N` | 90 | Days of history to include (used with `--update`) |
+
+```bash
+borescope memo --update              # generate/refresh the worklog
+borescope memo                       # show memo + recent 20 commits
+borescope memo --who src/auth        # who worked on the auth area recently?
+borescope memo --update --days 180   # longer history window
+```
+
+**`memo.toml` format:**
+
+```toml
+[project]
+name = "my-service"
+description = "One or two sentences."
+entry_points = ["src/main.rs:main"]
+danger_zones = ["src/db/schema.rs — FK OFF; cascade deletes manual"]
+
+[[decisions]]
+title = "SQLite as the only storage backend"
+when  = "2026-01"
+rationale = "Single file, zero config. Schema versioned in meta table."
+
+[[notes]]
+text   = "Re-run `borescope memo --update` after significant feature work"
+author = "alice"
+date   = "2026-08-30"
+```
+
+**Gitignore pattern** — add both lines so `memo.toml` is committed but `worklog.toml` is not:
+
+```
+.borescope/*
+!.borescope/memo.toml
+```
 
 ---
 

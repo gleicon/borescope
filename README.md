@@ -120,11 +120,21 @@ Flags high-risk symbols, co-change partners missing from the PR, and concurrency
 ### You inherited a codebase and have no map
 ```bash
 borescope index --git
+borescope memo --update          # generate the worklog: who did what, where
+borescope memo                   # read project decisions + recent work
 borescope smells
 borescope hotspots --top 20
 borescope map --weight hotspot -o tui
 ```
-In under a minute: which production files change constantly and recently (test files filtered out automatically), which are tightly coupled, which have dangerous concurrency patterns, and a navigable call graph of the whole thing.
+In under a minute: project context written down by the team, which production files change constantly (test files filtered out automatically), which have dangerous concurrency patterns, and a navigable call graph. Ask `borescope memo --who src/auth` to find who knows a specific area.
+
+### Your team is starting work on an area nobody owns
+```bash
+borescope memo                   # read existing decisions before adding new ones
+borescope memo --who src/payments   # find who has context
+borescope memo --update          # refresh the worklog after a sprint
+```
+Prevents duplicate work and surfaces prior decisions. Commit `memo.toml`; gitignore `worklog.toml`.
 
 ### You're using an agent to do the work
 ```bash
@@ -150,6 +160,7 @@ Cuts source bytes read by ~31% on rename tasks vs grep-and-read-all-files. Stabl
 | Topic | File |
 |---|---|
 | All commands + flags + exit codes | [`docs/commands.md`](docs/commands.md) |
+| Per-project memory (`memo` command) | [`docs/commands.md#memo`](docs/commands.md#memo--per-project-memory) |
 | Output formats (TUI, JSON, folded, HTML, Mermaid, DOT) | [`docs/output-formats.md`](docs/output-formats.md) |
 | Semantic patterns + custom smell rules | [`docs/patterns.md`](docs/patterns.md) |
 | Cookbook workflows (human + agent) | [`RECIPES.md`](RECIPES.md) |
