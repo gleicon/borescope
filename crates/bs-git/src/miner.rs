@@ -332,6 +332,62 @@ impl Miner {
             .collect())
     }
 
+    /// Returns one entry per commit in the last `days` days, with author, date,
+    /// subject line, and source files touched. Merge commits are excluded.
+    /// Mass-change commits (>50 files) are excluded as noise.
+    pub fn worklog(&self, days: u32) -> Result<Vec<WorklogEntry>> {
+        let since = format!("{} days ago", days);
+        let out = self.git(&[
+            "log".to_string(),
+            "--format=COMMIT\x1f%an\x1f%aI\x1f%s".to_string(),
+            "--name-only".to_string(),
+            "--no-merges".to_string(),
+            format!("--since={}", since),
+        ])?;
+
+        let mut entries: Vec<WorklogEntry> = Vec::new();
+        let mut current: Option<(String, String, String)> = None; // (author, date, subject)
+        let mut current_files: Vec<String> = Vec::new();
+
+        let flush = |current: &mut Option<(String, String, String)>,
+                     files: &mut Vec<String>,
+                     entries: &mut Vec<WorklogEntry>| {
+            if let Some((author, date, subject)) = current.take() {
+                let source_files: Vec<String> = files
+                    .drain(..)
+                    .filter(|f| LangId::from_path(Path::new(f)).is_source())
+                    .collect();
+                if !source_files.is_empty() && source_files.len() <= 50 {
+                    entries.push(WorklogEntry { author, date, subject, files: source_files });
+                }
+            } else {
+                files.clear();
+            }
+        };
+
+        for line in out.lines() {
+            if let Some(rest) = line.strip_prefix("COMMIT\x1f") {
+                flush(&mut current, &mut current_files, &mut entries);
+                let parts: Vec<&str> = rest.splitn(3, '\x1f').collect();
+                if parts.len() == 3 {
+                    let author = parts[0].trim().to_string();
+                    // ISO date: take first 10 chars (YYYY-MM-DD)
+                    let date = parts[1].get(..10).unwrap_or(parts[1]).to_string();
+                    let subject = parts[2].trim().to_string();
+                    current = Some((author, date, subject));
+                }
+            } else {
+                let trimmed = line.trim().to_string();
+                if !trimmed.is_empty() {
+                    current_files.push(trimmed);
+                }
+            }
+        }
+        flush(&mut current, &mut current_files, &mut entries);
+
+        Ok(entries)
+    }
+
     fn git(&self, args: &[String]) -> Result<String> {
         let out = Command::new("git")
             .args(args)
@@ -351,6 +407,14 @@ struct CommitMeta {
     ts: i64,
     #[allow(dead_code)]
     parent_count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorklogEntry {
+    pub author: String,
+    pub date: String,
+    pub subject: String,
+    pub files: Vec<String>,
 }
 
 fn count_loc_cached(store: &Store, path: &str) -> u32 {

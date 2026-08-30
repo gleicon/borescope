@@ -1,0 +1,36 @@
+[project]
+name = "borescope"
+description = "Static call-path engine — flamegraphs from structure, not execution. Indexes any repo into a symbol/call graph via tree-sitter, enriches it with git history signals, and answers path queries."
+entry_points = [
+    "crates/bs-cli/src/main.rs:main",
+]
+danger_zones = [
+    "crates/bs-link/src/linker.rs — confidence model changes break all linker tests",
+    "crates/bs-extract/queries/ — grammar ABI must match pinned tree-sitter 0.26.x runtime",
+    "crates/bs-core/src/store.rs — FK OFF in schema; cascade deletes must be done manually in order",
+]
+
+[[decisions]]
+title = "SQLite as the only storage backend"
+when = "2026-01"
+rationale = "Single file, zero config, zero deps. Schema versioned in meta table. Changing requires bumping schema version — coordinate with agent-contract.md."
+
+[[decisions]]
+title = "tree-sitter runtime pinned to 0.26.x"
+when = "2026-01"
+rationale = "Grammar ABI must match the runtime exactly. Mixing versions silently breaks parsing with no error. Use [patch] in workspace Cargo.toml if needed."
+
+[[decisions]]
+title = "Git integration shells out to git CLI, not libgit2"
+when = "2026-01"
+rationale = "Zero native deps. Abstract behind Miner trait so backend can be swapped. All git calls go through bs-git::Miner::git()."
+
+[[decisions]]
+title = "JSON output schema 1 is a stability contract"
+when = "2026-08"
+rationale = "Additive changes only. Breaking changes require incrementing schema to 2. Coordinate with docs/agent-contract.md before any output format change."
+
+[[notes]]
+text = "Run `borescope memo --update` after any significant feature work to keep the worklog fresh"
+author = "gleicon"
+date = "2026-08-30"

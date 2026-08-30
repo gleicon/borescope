@@ -8,6 +8,7 @@ pub mod explain_pr;
 pub mod hotspots;
 pub mod index;
 pub mod map;
+pub mod memo;
 pub mod paths;
 pub mod risk;
 pub mod skill;

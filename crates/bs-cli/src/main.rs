@@ -83,6 +83,8 @@ enum Commands {
     ExplainPr(commands::explain_pr::ExplainPrArgs),
     /// Print the embedded skill file (for Claude Code, Cursor, agent system prompts)
     Skill(commands::skill::SkillArgs),
+    /// Per-project memory: architectural decisions, team notes, and recent worklog
+    Memo(commands::memo::MemoArgs),
 }
 
 fn main() {
@@ -145,6 +147,7 @@ fn main() {
         Commands::Explain(args) => commands::explain::run(&ctx, args),
         Commands::ExplainPr(args) => commands::explain_pr::run(&ctx, args),
         Commands::Skill(args) => commands::skill::run(args),
+        Commands::Memo(args) => commands::memo::run(&ctx, args),
     };
 
     if let Err(e) = result {
