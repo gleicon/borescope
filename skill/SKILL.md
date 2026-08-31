@@ -128,19 +128,21 @@ borescope map -o dot --no-fence | dot -Tpng -o map.png # export large graph
 
 ---
 
-## Quality heuristics
+## Structural integrity
 
-After making changes, verify against these thresholds using borescope:
+After making changes, run these before committing:
 
 ```bash
-borescope explain <changed-symbol>   # complexity: < 22, loc: < 500
-borescope smells                     # 0 new findings: lock_across_await, sync_in_async,
-                                     #   high_complexity_bottleneck, unbalanced_fanout
-borescope diff                       # no new ~ or + frames you didn't intend
+borescope explain <changed-symbol>   # complexity: must be < 22, loc: must be < 200
+borescope smells                     # 0 new structural_violation, lock_across_await,
+                                     #   sync_in_async, high_complexity_bottleneck
+borescope diff                       # no unintended + or ~ frames
 ```
 
-If `explain` shows `complexity > 22` or `loc > 500` — split the function before committing.
-If `smells` shows new `unbalanced_fanout` findings — the function may be dead code (fanin < 2, churn < 3).
+`structural_violation` = function exceeds the absolute complexity (22) or LOC (200) limit.
+These are structural facts, not style: a function with complexity 25 has paths that cannot be fully unit-tested. Split it.
+
+If `smells` shows `unbalanced_fanout` — fanin < 2 + churn < 3 + fanout > 8 = likely dead code. Remove or wire it up.
 
 ---
 

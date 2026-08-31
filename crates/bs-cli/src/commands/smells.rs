@@ -210,6 +210,30 @@ fn detect_semantic(
             });
         }
 
+        // hard structural limits — fires regardless of hotspot or fanin
+        if sym.complexity > t.complexity_absolute {
+            report.semantic.push(SemanticSmell {
+                kind: "structural_violation".to_string(),
+                symbol: sym.qualified.clone(),
+                file: sym.file.display().to_string(),
+                detail: format!(
+                    "complexity={} exceeds absolute limit {} — split this function",
+                    sym.complexity, t.complexity_absolute
+                ),
+            });
+        }
+        if sym.loc > t.loc_high {
+            report.semantic.push(SemanticSmell {
+                kind: "structural_violation".to_string(),
+                symbol: sym.qualified.clone(),
+                file: sym.file.display().to_string(),
+                detail: format!(
+                    "loc={} exceeds limit {} — too many responsibilities in one function",
+                    sym.loc, t.loc_high
+                ),
+            });
+        }
+
         // high cyclomatic complexity + high fanin + hotspot — likely a bottleneck
         if sym.complexity > t.complexity_high
             && fanin > t.fanin_high
@@ -364,6 +388,7 @@ fn semantic_kind_desc(kind: &str) -> &'static str {
         "lock_across_await" => "mutex held across .await — deadlock risk",
         "sync_in_async" => "blocking call inside async fn — starves executor",
         "alloc_in_hotspot" => "heavy allocations in high-churn hot symbol",
+        "structural_violation" => "exceeds absolute complexity or LOC limit — split required",
         "high_complexity_bottleneck" => "complex + central + hot — hardest to change safely",
         "spawn_in_tight_loop" => "spawning threads/tasks inside a loop — explosion risk",
         "unbalanced_fanout" => "many callees, almost no callers — possibly dead code",

@@ -120,51 +120,54 @@ Designed for LLM consumption: machine-readable, plain-English `detail`, cite `de
 
 ---
 
-## Code quality heuristics
+## Structural integrity
 
-Borescope surfaces most of these without additional tooling. Add the rest to `.borescope/thresholds.toml` to tune thresholds for your team.
+Measurable, objective properties of code structure — not style, not preference. A function either has branching complexity > 22 or it does not. These thresholds have research backing and are independent of language or team conventions.
 
-| Heuristic | Target | Borescope command |
-|---|---|---|
-| Cyclomatic complexity | < 22 | `borescope explain <symbol>` → `complexity:` field; `borescope smells` flags `high_complexity_bottleneck` |
-| LOC per function | < 500 | `borescope explain <symbol>` → `loc:` field |
-| Dead code | 0 | `borescope smells` → `unbalanced_fanout` (fanout > 8, fanin < 2, churn < 3 = likely dead) |
-| Redundant coupling | 0 | `borescope smells` → `tangled_pair`; `borescope coupled <file>` |
-| Hot + complex bottleneck | 0 | `borescope smells` → `high_complexity_bottleneck`; `borescope explain` for verdict |
-| Lock + await | 0 | `borescope smells` → `lock_across_await`; `borescope paths --analyze` → `lock_await` signal |
-| Blocking in async | 0 | `borescope smells` → `sync_in_async` |
-| Spawn in tight loop | 0 | `borescope smells` → `spawn_in_tight_loop` |
+`borescope smells` reports `structural_violation` when the absolute limits are exceeded. `borescope explain <symbol>` shows the raw numbers for any individual function.
 
-Heuristics not tracked by borescope (need external tools):
+### What each metric measures
 
-| Heuristic | Tool |
-|---|---|
-| Cognitive complexity | SonarQube, rust-code-analysis |
-| Halstead difficulty | rust-code-analysis, lizard |
-| Test coverage / CRAP | cargo-tarpaulin + tarpaulin --out Lcov |
-| Surviving mutants | cargo-mutants |
-| Unknown/any types | TypeScript: tsc --strict; Rust: N/A |
+| Metric | What it is | Absolute limit | Borescope |
+|---|---|---|---|
+| [Cyclomatic complexity](https://en.wikipedia.org/wiki/Cyclomatic_complexity) | Number of linearly independent paths through a function — one per branch, loop, case. A function with complexity 1 has no branches; 22+ cannot be fully unit-tested without combinatorial cases. | 22 | `borescope smells` → `structural_violation`; `borescope explain` → `complexity:` |
+| LOC per function | Raw line count for one function. Over 200 lines means the function has more than one responsibility by almost any measure. | 200 | `borescope smells` → `structural_violation`; `borescope explain` → `loc:` |
+| [Fan-in](https://en.wikipedia.org/wiki/Fan-in) (callers) | How many other symbols call this one. High fan-in = wide blast radius when you change it. | flag at 8+ (compound) | `borescope callers`; `borescope explain` → `fanin:` |
+| Dead code | Low fan-in + low churn + high fan-out = code nothing calls, nothing changes, but touches many things. | 0 | `borescope smells` → `unbalanced_fanout` |
+| Tangled pair | Two files that always change together but have no direct call relationship — missing abstraction. | 0 | `borescope smells` → `tangled_pair`; `borescope coupled` |
+| Lock + await | Mutex held across an async yield point — guaranteed deadlock when concurrency > 1. | 0 | `borescope smells` → `lock_across_await` |
+| Blocking in async | Blocking call (`block_on`) inside an async fn — starves the executor thread pool. | 0 | `borescope smells` → `sync_in_async` |
+| Spawn in tight loop | Thread/goroutine creation inside a loop — unbounded growth. | 0 | `borescope smells` → `spawn_in_tight_loop` |
+
+### Two-tier complexity detection
+
+Borescope has two distinct complexity checks that serve different purposes:
+
+**Absolute structural limit** (`complexity_absolute = 22`, `loc_high = 200`): fires on any function exceeding these, regardless of how hot or how many callers it has. A cold function with complexity 32 is still structurally broken. Reported as `structural_violation`.
+
+**Compound bottleneck** (`complexity_high = 10` + `fanin_high = 8` + `hotspot_medium = 0.5`): fires only when a function is simultaneously complex AND heavily depended on AND actively changing — the triple threat. A complex function nobody calls is just ugly; the same function with 14 callers and hotspot 0.8 will take down production. Reported as `high_complexity_bottleneck`.
 
 ### Threshold configuration
 
 ```toml
 # .borescope/thresholds.toml
 [default]
-complexity_high = 22   # flag high_complexity_bottleneck above this
-fanin_high      = 8    # flag unbalanced_fanout above this
-hotspot_high    = 0.7  # alloc_in_hotspot upper threshold
-hotspot_medium  = 0.5  # complexity_bottleneck lower threshold
+complexity_absolute = 22   # hard structural limit — structural_violation fires above this
+loc_high            = 200  # hard per-function LOC limit — structural_violation fires above this
+complexity_high     = 10   # compound bottleneck: needs fanin + hotspot conditions too
+fanin_high          = 8    # compound bottleneck: callers threshold
+hotspot_high        = 0.7  # alloc_in_hotspot upper threshold
+hotspot_medium      = 0.5  # compound bottleneck: hotspot threshold
 ```
 
-### Custom rule for the full heuristic set
+### Metrics not tracked by borescope
 
-```toml
-# .borescope/smells.toml
-[[rules]]
-name        = "quality-gate-violation"
-description = "high complexity + high fanout — exceeds quality heuristic"
-patterns    = ["loop", "alloc"]
-severity    = "high"
-```
+These require external tools — borescope does not replace them:
 
-A rule fires when **all** listed patterns appear on the same symbol. Combine with `borescope smells --recommend` for security-sensitive co-change partners.
+| Metric | What it measures | Tool |
+|---|---|---|
+| [Cognitive complexity](https://www.sonarsource.com/docs/CognitiveComplexity.pdf) | Human readability cost — weights nesting depth more than raw branch count | SonarQube, rust-code-analysis |
+| [Halstead difficulty](https://en.wikipedia.org/wiki/Halstead_complexity_measures) | Operator/operand diversity — proxy for mental effort to understand | rust-code-analysis, lizard |
+| [CRAP score](https://en.wikipedia.org/wiki/Change_risk_anti-patterns_score) | complexity² × (1 - coverage)² — combines structural and test risk | cargo-tarpaulin + post-process |
+| Surviving mutants | Logic errors that tests don't catch | cargo-mutants |
+| Type soundness | `any`/`unknown` escapes in TypeScript | tsc --strict |

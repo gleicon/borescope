@@ -270,10 +270,15 @@ Place config files in `.borescope/` at the repo root.
 
 ```toml
 [default]
+# Hard structural limits — structural_violation fires when exceeded regardless of hotspot/fanin
+complexity_absolute = 22   # absolute cyclomatic complexity limit per function
+loc_high            = 200  # absolute LOC limit per function
+
+# Compound bottleneck — high_complexity_bottleneck fires only when ALL THREE conditions met
+complexity_high = 10    # complexity factor (needs fanin + hotspot conditions too)
+fanin_high      = 8     # fanin factor for compound bottleneck detection
 hotspot_high    = 0.7   # alloc_in_hotspot and complexity_bottleneck upper threshold
 hotspot_medium  = 0.5   # complexity_bottleneck lower threshold
-complexity_high = 10    # cyclomatic complexity ceiling
-fanin_high      = 8     # fanin ceiling for bottleneck detection
 ```
 
 ### `.borescope/smells.toml` — custom smell rules

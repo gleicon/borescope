@@ -5,10 +5,16 @@ use std::path::Path;
 /// All values fall back to the hardcoded defaults when the file is absent.
 #[derive(Debug, Clone)]
 pub struct Thresholds {
+    /// Used in the compound `high_complexity_bottleneck` smell (needs hotspot + fanin too).
     pub hotspot_high: f32,
     pub hotspot_medium: f32,
     pub complexity_high: u32,
     pub fanin_high: u32,
+    /// Hard structural limit — `structural_violation` fires when complexity exceeds this
+    /// regardless of hotspot or fanin. Independent of the compound bottleneck check.
+    pub complexity_absolute: u32,
+    /// Hard structural limit — `structural_violation` fires when function LOC exceeds this.
+    pub loc_high: u32,
 }
 
 impl Default for Thresholds {
@@ -18,6 +24,8 @@ impl Default for Thresholds {
             hotspot_medium: 0.5,
             complexity_high: 10,
             fanin_high: 8,
+            complexity_absolute: 22,
+            loc_high: 200,
         }
     }
 }
@@ -43,6 +51,8 @@ struct DefaultSection {
     hotspot_medium: Option<f32>,
     complexity_high: Option<u32>,
     fanin_high: Option<u32>,
+    complexity_absolute: Option<u32>,
+    loc_high: Option<u32>,
 }
 
 #[derive(Deserialize, Default)]
@@ -72,6 +82,12 @@ pub fn load_thresholds(repo_root: &Path) -> Thresholds {
         }
         if let Some(v) = d.fanin_high {
             t.fanin_high = v;
+        }
+        if let Some(v) = d.complexity_absolute {
+            t.complexity_absolute = v;
+        }
+        if let Some(v) = d.loc_high {
+            t.loc_high = v;
         }
     }
     t
