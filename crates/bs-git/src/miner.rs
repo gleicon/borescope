@@ -336,55 +336,30 @@ impl Miner {
     /// subject line, and source files touched. Merge commits are excluded.
     /// Mass-change commits (>50 files) are excluded as noise.
     pub fn worklog(&self, days: u32) -> Result<Vec<WorklogEntry>> {
-        let since = format!("{} days ago", days);
         let out = self.git(&[
             "log".to_string(),
             "--format=COMMIT\x1f%an\x1f%aI\x1f%s".to_string(),
             "--name-only".to_string(),
             "--no-merges".to_string(),
-            format!("--since={}", since),
+            format!("--since={} days ago", days),
         ])?;
 
         let mut entries: Vec<WorklogEntry> = Vec::new();
-        let mut current: Option<(String, String, String)> = None; // (author, date, subject)
+        let mut current: Option<(String, String, String)> = None;
         let mut current_files: Vec<String> = Vec::new();
-
-        let flush = |current: &mut Option<(String, String, String)>,
-                     files: &mut Vec<String>,
-                     entries: &mut Vec<WorklogEntry>| {
-            if let Some((author, date, subject)) = current.take() {
-                let source_files: Vec<String> = files
-                    .drain(..)
-                    .filter(|f| LangId::from_path(Path::new(f)).is_source())
-                    .collect();
-                if !source_files.is_empty() && source_files.len() <= 50 {
-                    entries.push(WorklogEntry { author, date, subject, files: source_files });
-                }
-            } else {
-                files.clear();
-            }
-        };
 
         for line in out.lines() {
             if let Some(rest) = line.strip_prefix("COMMIT\x1f") {
-                flush(&mut current, &mut current_files, &mut entries);
-                let parts: Vec<&str> = rest.splitn(3, '\x1f').collect();
-                if parts.len() == 3 {
-                    let author = parts[0].trim().to_string();
-                    // ISO date: take first 10 chars (YYYY-MM-DD)
-                    let date = parts[1].get(..10).unwrap_or(parts[1]).to_string();
-                    let subject = parts[2].trim().to_string();
-                    current = Some((author, date, subject));
-                }
+                flush_commit(&mut current, &mut current_files, &mut entries);
+                current = parse_commit_line(rest);
             } else {
-                let trimmed = line.trim().to_string();
+                let trimmed = line.trim();
                 if !trimmed.is_empty() {
-                    current_files.push(trimmed);
+                    current_files.push(trimmed.to_string());
                 }
             }
         }
-        flush(&mut current, &mut current_files, &mut entries);
-
+        flush_commit(&mut current, &mut current_files, &mut entries);
         Ok(entries)
     }
 
@@ -399,6 +374,35 @@ impl Miner {
             return Err(bs_core::Error::Git(stderr.into_owned()));
         }
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+}
+
+fn parse_commit_line(rest: &str) -> Option<(String, String, String)> {
+    let parts: Vec<&str> = rest.splitn(3, '\x1f').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let author = parts[0].trim().to_string();
+    let date = parts[1].get(..10).unwrap_or(parts[1]).to_string();
+    let subject = parts[2].trim().to_string();
+    Some((author, date, subject))
+}
+
+fn flush_commit(
+    current: &mut Option<(String, String, String)>,
+    files: &mut Vec<String>,
+    entries: &mut Vec<WorklogEntry>,
+) {
+    if let Some((author, date, subject)) = current.take() {
+        let source_files: Vec<String> = files
+            .drain(..)
+            .filter(|f| LangId::from_path(Path::new(f)).is_source())
+            .collect();
+        if !source_files.is_empty() && source_files.len() <= 50 {
+            entries.push(WorklogEntry { author, date, subject, files: source_files });
+        }
+    } else {
+        files.clear();
     }
 }
 

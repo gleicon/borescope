@@ -5,14 +5,33 @@ Cookbook of common workflows — human and agent.
 ## Quick reference
 
 ```bash
-# Two-phase cold start (D8)
-borescope index --no-git    # Phase 1: fast; paths/callers/map/explain work immediately
-borescope index --git &     # Phase 2: background; needed for hotspots/smells/age/coupled
+# Always start here
+borescope memo                               # project decisions, danger zones, recent work
+borescope memo --who src/<area>              # who has context on this area?
 
+# Index (once per repo)
+borescope index --no-git                     # fast — structural queries ready immediately
+borescope index --git &                      # background — history signals
+
+# Explore
+borescope hotspots --top 15                  # actively risky production files
 borescope map --weight hotspot -o tui        # interactive explorer
-borescope smells                             # grouped antipattern + semantic report
-borescope explain <symbol>                   # plain-English profile
-borescope explain-pr <branch>                # PR impact analysis
+borescope smells                             # antipattern + concurrency report
+
+# Understand one symbol
+borescope explain <file>:<symbol>            # risk verdict, fanin, patterns
+borescope callers <file>:<symbol> --depth 3  # blast radius
+borescope paths <file>:<symbol> --analyze    # forward slice + signal array
+
+# PR review
+borescope explain-pr <branch>               # risk, co-change warnings, verdict
+borescope diff main HEAD --weight hotspot    # call-tree diff
+
+# Flamegraph — trace FROM an entry point, not a leaf
+borescope paths <entry> --weight hotspot -o folded | inferno-flamegraph > flame.svg && open flame.svg
+# Danger zone context (who calls the risky function):
+borescope callers <danger-fn> --depth 2      # find caller entry points first
+borescope paths <caller> --to <danger-fn> -o folded | inferno-flamegraph > dz.svg && open dz.svg
 ```
 
 ---
@@ -285,29 +304,29 @@ borescope explain-pr feature/branch -o json | jq '.missed_cochange'
 ```bash
 cargo install inferno   # one-time
 
-borescope paths src/http/router.rs:dispatch_to_worker_pool \
-  --weight hotspot \
-  -o folded \
-  | inferno-flamegraph \
-      --title "HTTP request → V8 isolate" \
-      --colors rust \
-      --width 1400 \
-  > flame.svg
-open flame.svg
+# Trace from an entry point down through the call tree
+borescope paths src/http/router.rs:handle --weight hotspot -o folded \
+  | inferno-flamegraph --title "request path" --colors rust --width 1600 \
+  > flame.svg && open flame.svg
 ```
 
-Folded output is Brendan Gregg collapsed format. Each leaf in the call tree becomes a stack frame;
-width is proportional to the `--weight` score (uniform if no weight is chosen).
+Key: trace **from an entry point** (handler, main, run), not from a leaf function. Leaf functions call mostly stdlib, producing thin graphs. Entry points produce wide graphs showing the full call context.
+
+```bash
+# Danger zone: show how a risky function is reached
+# Step 1: find who calls it
+borescope callers src/db/store.rs:upsert_symbol --depth 2
+
+# Step 2: trace from the caller entry point to the danger zone
+borescope paths src/commands/index.rs:run --to src/db/store.rs:upsert_symbol \
+  --weight hotspot -o folded \
+  | inferno-flamegraph --title "index → upsert_symbol (danger zone)" --width 1600 \
+  > dz.svg && open dz.svg
+```
 
 **Real example — HTTP request to V8 isolate** (from [nano-rs](https://github.com/gleicon/nano-rs)):
 
 ![HTTP request to V8 isolate](docs/screenshots/flame-request-to-isolate.svg)
-
-The graph traces the full static path from the HTTP ingress through the worker pool
-MPSC channel (`[mpsc]`) to the V8 isolate compiling and evaluating `index.js`. The three
-V8 module lifecycle phases (`compile_module_graph`, `instantiate_module`, `evaluate_module`)
-are visible as distinct sub-frames inside `execute_esm_module`, making the compilation
-cost breakdown immediately readable — without ever running the server.
 
 ---
 

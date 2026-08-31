@@ -307,17 +307,23 @@ fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
     if pf.defs.is_empty() && pf.imports.is_empty() && pf.calls.is_empty() {
         return Ok(0);
     }
+    let count = write_defs(store, &pf)?;
+    write_imports(store, &pf);
+    write_calls(store, &pf);
+    write_refs(store, &pf);
+    Ok(count)
+}
 
-    let mut symbols_added = 0usize;
-
+fn write_defs(store: &Store, pf: &ParsedFile) -> Result<usize> {
+    let file_sym_id = format!("file:{}", pf.rel_path);
+    let mut count = 0;
     for def in &pf.defs {
-        let qualified = format!("{}:{}", pf.rel_path, def.name);
         let id = stable_id(&pf.rel_path, &def.name, &def.kind);
         let sym = Symbol {
             id: id.clone(),
             kind: def.kind.clone(),
             name: def.name.clone(),
-            qualified,
+            qualified: format!("{}:{}", pf.rel_path, def.name),
             file: PathBuf::from(&pf.rel_path),
             span: (def.start_line, def.end_line),
             lang: pf.lang.clone(),
@@ -329,59 +335,52 @@ fn write_parsed(store: &Store, pf: ParsedFile) -> Result<usize> {
             patterns: vec![],
         };
         store.upsert_symbol(&sym)?;
-        symbols_added += 1;
+        count += 1;
+        write_def_patterns(store, &id, &pf.patterns, def.start_line, def.end_line);
+        store.upsert_edge(&file_sym_id, &id, &EdgeKind::Contains, 1.0, None).ok();
+    }
+    Ok(count)
+}
 
-        let mut def_patterns: Vec<String> = pf
-            .patterns
-            .iter()
-            .filter(|p| p.line >= def.start_line && p.line <= def.end_line)
-            .map(|p| p.kind.clone())
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
-        def_patterns.sort();
-
-        if !def_patterns.is_empty() {
-            if let Ok(json) = serde_json::to_string(&def_patterns) {
-                store.update_symbol_patterns(&id, &json).ok();
-            }
+fn write_def_patterns(store: &Store, id: &str, patterns: &[RawPattern], start: u32, end: u32) {
+    let mut def_patterns: Vec<String> = patterns
+        .iter()
+        .filter(|p| p.line >= start && p.line <= end)
+        .map(|p| p.kind.clone())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+    def_patterns.sort();
+    if !def_patterns.is_empty() {
+        if let Ok(json) = serde_json::to_string(&def_patterns) {
+            store.update_symbol_patterns(id, &json).ok();
         }
-
-        let file_sym_id = format!("file:{}", pf.rel_path);
-        store
-            .upsert_edge(&file_sym_id, &id, &EdgeKind::Contains, 1.0, None)
-            .ok();
     }
+}
 
+fn write_imports(store: &Store, pf: &ParsedFile) {
+    let from_id = stable_id(&pf.rel_path, &pf.rel_path, &SymbolKind::File);
     for import in &pf.imports {
-        let from_id = stable_id(&pf.rel_path, &pf.rel_path, &SymbolKind::File);
-        let to_id = format!("import:{}", import);
-        store
-            .upsert_edge(&from_id, &to_id, &EdgeKind::Imports, 1.0, None)
-            .ok();
+        store.upsert_edge(&from_id, &format!("import:{}", import), &EdgeKind::Imports, 1.0, None).ok();
     }
+}
 
+fn write_calls(store: &Store, pf: &ParsedFile) {
     for call in &pf.calls {
-        let callee_id = format!("unresolved:{}", call.callee);
         if let Some(enc) = enclosing_def(&pf.defs, call.line) {
             let enc_id = stable_id(&pf.rel_path, &enc.name, &enc.kind);
-            store
-                .upsert_edge(&enc_id, &callee_id, &EdgeKind::Calls, 0.3, None)
-                .ok();
+            store.upsert_edge(&enc_id, &format!("unresolved:{}", call.callee), &EdgeKind::Calls, 0.3, None).ok();
         }
     }
+}
 
+fn write_refs(store: &Store, pf: &ParsedFile) {
     for r in &pf.refs {
-        let target_id = format!("unresolved:{}", r.name);
         if let Some(enc) = enclosing_def(&pf.defs, r.line) {
             let enc_id = stable_id(&pf.rel_path, &enc.name, &enc.kind);
-            store
-                .upsert_edge(&enc_id, &target_id, &EdgeKind::Reference, 0.5, None)
-                .ok();
+            store.upsert_edge(&enc_id, &format!("unresolved:{}", r.name), &EdgeKind::Reference, 0.5, None).ok();
         }
     }
-
-    Ok(symbols_added)
 }
 
 fn enclosing_def(defs: &[RawDef], line: u32) -> Option<&RawDef> {
