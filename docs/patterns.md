@@ -117,3 +117,54 @@ Signal kinds:
 | `async_handoff` | info | path ends at `spawn` or channel send — continuation is async |
 
 Designed for LLM consumption: machine-readable, plain-English `detail`, cite `detail` directly in explanations without tree traversal.
+
+---
+
+## Code quality heuristics
+
+Borescope surfaces most of these without additional tooling. Add the rest to `.borescope/thresholds.toml` to tune thresholds for your team.
+
+| Heuristic | Target | Borescope command |
+|---|---|---|
+| Cyclomatic complexity | < 22 | `borescope explain <symbol>` → `complexity:` field; `borescope smells` flags `high_complexity_bottleneck` |
+| LOC per function | < 500 | `borescope explain <symbol>` → `loc:` field |
+| Dead code | 0 | `borescope smells` → `unbalanced_fanout` (fanout > 8, fanin < 2, churn < 3 = likely dead) |
+| Redundant coupling | 0 | `borescope smells` → `tangled_pair`; `borescope coupled <file>` |
+| Hot + complex bottleneck | 0 | `borescope smells` → `high_complexity_bottleneck`; `borescope explain` for verdict |
+| Lock + await | 0 | `borescope smells` → `lock_across_await`; `borescope paths --analyze` → `lock_await` signal |
+| Blocking in async | 0 | `borescope smells` → `sync_in_async` |
+| Spawn in tight loop | 0 | `borescope smells` → `spawn_in_tight_loop` |
+
+Heuristics not tracked by borescope (need external tools):
+
+| Heuristic | Tool |
+|---|---|
+| Cognitive complexity | SonarQube, rust-code-analysis |
+| Halstead difficulty | rust-code-analysis, lizard |
+| Test coverage / CRAP | cargo-tarpaulin + tarpaulin --out Lcov |
+| Surviving mutants | cargo-mutants |
+| Unknown/any types | TypeScript: tsc --strict; Rust: N/A |
+
+### Threshold configuration
+
+```toml
+# .borescope/thresholds.toml
+[default]
+complexity_high = 22   # flag high_complexity_bottleneck above this
+fanin_high      = 8    # flag unbalanced_fanout above this
+hotspot_high    = 0.7  # alloc_in_hotspot upper threshold
+hotspot_medium  = 0.5  # complexity_bottleneck lower threshold
+```
+
+### Custom rule for the full heuristic set
+
+```toml
+# .borescope/smells.toml
+[[rules]]
+name        = "quality-gate-violation"
+description = "high complexity + high fanout — exceeds quality heuristic"
+patterns    = ["loop", "alloc"]
+severity    = "high"
+```
+
+A rule fires when **all** listed patterns appear on the same symbol. Combine with `borescope smells --recommend` for security-sensitive co-change partners.

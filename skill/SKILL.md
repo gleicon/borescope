@@ -15,6 +15,16 @@ borescope index --git &             # Phase 2: background — hotspots/smells/ag
 
 `memo` is always safe to run even without an index. Run it first when entering an unfamiliar repo or area.
 
+### After reading memo — what to do next
+
+| memo shows | next command |
+|---|---|
+| danger zones listed | `borescope callers <danger-fn> --depth 3` — blast radius before touching |
+| recent work in an area | `borescope explain <file>:<symbol>` — understand the active symbol |
+| architectural decision about a module | `borescope coupled <file>` — what moves with it |
+| no worklog (first time) | `borescope memo --update` — generate from git history |
+| nothing / empty | `borescope hotspots --top 15` then `borescope smells` — discover structure |
+
 ---
 
 ## Scenario: starting on an unfamiliar repo
@@ -115,6 +125,22 @@ borescope memo --update         # refresh worklog so teammates see what changed
 borescope paths src/auth.rs:verify -o mermaid          # render in PR comment
 borescope map -o dot --no-fence | dot -Tpng -o map.png # export large graph
 ```
+
+---
+
+## Quality heuristics
+
+After making changes, verify against these thresholds using borescope:
+
+```bash
+borescope explain <changed-symbol>   # complexity: < 22, loc: < 500
+borescope smells                     # 0 new findings: lock_across_await, sync_in_async,
+                                     #   high_complexity_bottleneck, unbalanced_fanout
+borescope diff                       # no new ~ or + frames you didn't intend
+```
+
+If `explain` shows `complexity > 22` or `loc > 500` — split the function before committing.
+If `smells` shows new `unbalanced_fanout` findings — the function may be dead code (fanin < 2, churn < 3).
 
 ---
 
